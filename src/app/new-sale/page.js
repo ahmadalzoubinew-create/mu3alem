@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function NewSale() {
   const [customers, setCustomers] = useState([]);
@@ -19,6 +19,7 @@ export default function NewSale() {
   const [msg, setMsg] = useState('');
   const [user, setUser] = useState(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -38,30 +39,24 @@ export default function NewSale() {
     if (custs) setCustomers(custs);
     if (inv) setInventory(inv);
 
+    // لو جاي من صفحة الزبائن — انتخب الزبون تلقائياً
+    const customerId = searchParams.get('customer');
+    if (customerId && custs) {
+      const preSelected = custs.find(c => c.id === customerId);
+      if (preSelected) onCustomerSelect(preSelected);
+    }
+
     if (txns && custs) {
-      // 5 الاكثر تعاملا بعدد المرات
       const countMap = {};
       const valueMap = {};
       txns.forEach(t => {
         countMap[t.customer_id] = (countMap[t.customer_id] || 0) + 1;
         valueMap[t.customer_id] = (valueMap[t.customer_id] || 0) + parseFloat(t.total_amount);
       });
-
       const custMap = {};
       custs.forEach(c => custMap[c.id] = c);
-
-      const byCount = Object.entries(countMap)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([id]) => custMap[id])
-        .filter(Boolean);
-
-      const byValue = Object.entries(valueMap)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([id]) => custMap[id])
-        .filter(Boolean);
-
+      const byCount = Object.entries(countMap).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => custMap[id]).filter(Boolean);
+      const byValue = Object.entries(valueMap).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => custMap[id]).filter(Boolean);
       setTopByCount(byCount);
       setTopByValue(byValue);
     }
@@ -150,13 +145,9 @@ export default function NewSale() {
   }
 
   const unitLabel = { pcs: 'قطعة', g: 'غرام', ctn: 'كرتون' };
-
-  // فلترة الزبائن بالبحث
   const filteredCustomers = search.trim()
     ? customers.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search)))
     : customers;
-
-  // اذا في بحث ما نبين الـ top
   const showTop = !search.trim() && !selectedCustomer;
 
   function CustomerBtn({ c }) {
@@ -173,9 +164,7 @@ export default function NewSale() {
         }}>
         <div style={{ textAlign: 'left' }}>
           {parseFloat(c.total_debt) > 0 && (
-            <span style={{ fontSize: '11px', color: '#CE1126', fontWeight: 700 }}>
-              €{parseFloat(c.total_debt).toFixed(2)}
-            </span>
+            <span style={{ fontSize: '11px', color: '#CE1126', fontWeight: 700 }}>€{parseFloat(c.total_debt).toFixed(2)}</span>
           )}
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -192,7 +181,7 @@ export default function NewSale() {
       <div style={{ height: '4px', background: 'linear-gradient(90deg, #000 25%, #fff 25%, #fff 50%, #007A3D 50%, #007A3D 75%, #CE1126 75%)' }} />
 
       <div style={{ padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #151515' }}>
-        <button onClick={() => router.push('/dashboard')}
+        <button onClick={() => router.back()}
           style={{ background: 'transparent', border: '1px solid #222', borderRadius: '12px', padding: '8px 14px', color: '#555', cursor: 'pointer', fontSize: '13px' }}>
           رجوع
         </button>
@@ -204,28 +193,18 @@ export default function NewSale() {
 
       <form onSubmit={handleSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-        {/* اختار الزبون */}
         {!selectedCustomer && (
           <div>
             <p style={{ fontSize: '10px', color: '#444', letterSpacing: '2px', textTransform: 'uppercase', textAlign: 'right', marginBottom: '12px' }}>اختار الزبون</p>
-
-            {/* البحث */}
-            <input
-              type="text"
-              placeholder="ابحث عن زبون..."
-              value={search}
+            <input type="text" placeholder="ابحث عن زبون..." value={search}
               onChange={e => setSearch(e.target.value)}
               style={{ width: '100%', background: '#161616', border: '1.5px solid #333', borderRadius: '16px', padding: '14px 16px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box', marginBottom: '16px' }}
               onFocus={e => e.target.style.borderColor = '#CE1126'}
               onBlur={e => e.target.style.borderColor = '#333'}
             />
-
-            {/* Top 5 بعدد المرات */}
             {showTop && topByCount.length > 0 && (
               <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '10px', color: '#007A3D', letterSpacing: '1px', textAlign: 'right', marginBottom: '8px' }}>
-                  الاكثر تعاملا
-                </p>
+                <p style={{ fontSize: '10px', color: '#007A3D', letterSpacing: '1px', textAlign: 'right', marginBottom: '8px' }}>الاكثر تعاملا</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end' }}>
                   {topByCount.map(c => (
                     <button key={c.id} type="button" onClick={() => onCustomerSelect(c)}
@@ -236,13 +215,9 @@ export default function NewSale() {
                 </div>
               </div>
             )}
-
-            {/* Top 5 بالقيمة */}
             {showTop && topByValue.length > 0 && (
               <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '10px', color: '#e8971e', letterSpacing: '1px', textAlign: 'right', marginBottom: '8px' }}>
-                  الاعلى قيمة
-                </p>
+                <p style={{ fontSize: '10px', color: '#e8971e', letterSpacing: '1px', textAlign: 'right', marginBottom: '8px' }}>الاعلى قيمة</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end' }}>
                   {topByValue.map(c => (
                     <button key={c.id} type="button" onClick={() => onCustomerSelect(c)}
@@ -253,23 +228,17 @@ export default function NewSale() {
                 </div>
               </div>
             )}
-
-            {/* قائمة الزبائن */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
               {filteredCustomers.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '20px', color: '#333', fontSize: '13px' }}>
-                  ما في زبون بهاد الاسم
-                </div>
+                <div style={{ textAlign: 'center', padding: '20px', color: '#333', fontSize: '13px' }}>ما في زبون بهاد الاسم</div>
               )}
               {filteredCustomers.map(c => <CustomerBtn key={c.id} c={c} />)}
             </div>
           </div>
         )}
 
-        {/* بعد اختيار الزبون */}
         {selectedCustomer && (
           <>
-            {/* معلومات الزبون المختار */}
             <div style={{ background: '#0f0f0f', border: '1.5px solid #CE1126', borderRadius: '18px', padding: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <button type="button" onClick={() => { setSelectedCustomer(null); setSaleItems([]); setSearch(''); }}
@@ -281,8 +250,6 @@ export default function NewSale() {
                   {selectedCustomer.phone && <div style={{ color: '#444', fontSize: '12px' }}>{selectedCustomer.phone}</div>}
                 </div>
               </div>
-
-              {/* الدين */}
               {customerDebt > 0 && (
                 <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #1a1a1a' }}>
                   <button type="button" onClick={() => setShowDebtDetails(!showDebtDetails)}
@@ -293,7 +260,6 @@ export default function NewSale() {
                       <span style={{ color: '#CE1126', fontWeight: 900, fontSize: '16px' }}>€{customerDebt.toFixed(2)}</span>
                     </div>
                   </button>
-
                   {showDebtDetails && customerLastSales.length > 0 && (
                     <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       {customerLastSales.map(s => (
@@ -302,9 +268,7 @@ export default function NewSale() {
                             {parseFloat(s.credit_amount) > 0 && (
                               <span style={{ color: '#CE1126', fontSize: '12px', fontWeight: 700 }}>دين: €{parseFloat(s.credit_amount).toFixed(2)}</span>
                             )}
-                            <div style={{ color: '#333', fontSize: '10px' }}>
-                              {new Date(s.created_at).toLocaleDateString('ar')}
-                            </div>
+                            <div style={{ color: '#333', fontSize: '10px' }}>{new Date(s.created_at).toLocaleDateString('ar')}</div>
                           </div>
                           <div style={{ textAlign: 'right' }}>
                             <div style={{ color: 'white', fontSize: '13px', fontWeight: 700 }}>{s.inventory?.name}</div>
@@ -316,7 +280,6 @@ export default function NewSale() {
                   )}
                 </div>
               )}
-
               {customerDebt === 0 && (
                 <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #1a1a1a', textAlign: 'right' }}>
                   <span style={{ color: '#007A3D', fontSize: '12px' }}>حساب نظيف ✓</span>
@@ -324,36 +287,21 @@ export default function NewSale() {
               )}
             </div>
 
-            {/* الاصناف */}
             <div>
               <p style={{ fontSize: '10px', color: '#444', letterSpacing: '2px', textTransform: 'uppercase', textAlign: 'right', marginBottom: '12px' }}>الاصناف والاسعار</p>
-
               {saleItems.length > 0 && (
                 <div style={{ background: 'rgba(0,122,61,0.08)', border: '1px solid rgba(0,122,61,0.2)', borderRadius: '12px', padding: '10px 14px', marginBottom: '12px', textAlign: 'right' }}>
-                  <p style={{ color: '#007A3D', fontSize: '12px', margin: 0 }}>
-                    آخر اسعار {selectedCustomer.name} — عدّل اذا بدك
-                  </p>
+                  <p style={{ color: '#007A3D', fontSize: '12px', margin: 0 }}>آخر اسعار {selectedCustomer.name} — عدّل اذا بدك</p>
                 </div>
               )}
-
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {inventory.map(item => {
                   const selected = saleItems.find(i => i.inventoryId === item.id);
                   return (
-                    <div key={item.id} style={{
-                      borderRadius: '16px',
-                      border: `1.5px solid ${selected ? '#CE1126' : '#1a1a1a'}`,
-                      background: selected ? 'rgba(206,17,38,0.05)' : '#0f0f0f',
-                      overflow: 'hidden', transition: 'all 0.15s'
-                    }}>
+                    <div key={item.id} style={{ borderRadius: '16px', border: `1.5px solid ${selected ? '#CE1126' : '#1a1a1a'}`, background: selected ? 'rgba(206,17,38,0.05)' : '#0f0f0f', overflow: 'hidden', transition: 'all 0.15s' }}>
                       <button type="button" onClick={() => toggleInventoryItem(item)}
                         style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                        <div style={{
-                          width: '20px', height: '20px', borderRadius: '50%',
-                          border: `2px solid ${selected ? '#CE1126' : '#333'}`,
-                          background: selected ? '#CE1126' : 'transparent',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                        }}>
+                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: `2px solid ${selected ? '#CE1126' : '#333'}`, background: selected ? '#CE1126' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           {selected && <span style={{ color: 'white', fontSize: '10px' }}>✓</span>}
                         </div>
                         <div style={{ textAlign: 'right' }}>
@@ -363,15 +311,13 @@ export default function NewSale() {
                       </button>
                       {selected && (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', padding: '0 14px 14px' }}>
-                          <input type="text" inputMode="decimal" placeholder="الكمية"
-                            value={selected.quantity}
+                          <input type="text" inputMode="decimal" placeholder="الكمية" value={selected.quantity}
                             onChange={e => updateField(item.id, 'quantity', e.target.value)}
                             style={{ background: '#0a0a0a', border: '1.5px solid #222', borderRadius: '12px', padding: '10px 12px', color: 'white', fontSize: '13px', textAlign: 'right', outline: 'none', width: '100%', boxSizing: 'border-box' }}
                             onFocus={e => e.target.style.borderColor = '#CE1126'}
                             onBlur={e => e.target.style.borderColor = '#222'}
                           />
-                          <input type="text" inputMode="decimal" placeholder="السعر €"
-                            value={selected.price}
+                          <input type="text" inputMode="decimal" placeholder="السعر €" value={selected.price}
                             onChange={e => updateField(item.id, 'price', e.target.value)}
                             style={{ background: '#0a0a0a', border: '1.5px solid #222', borderRadius: '12px', padding: '10px 12px', color: 'white', fontSize: '13px', textAlign: 'right', outline: 'none', width: '100%', boxSizing: 'border-box' }}
                             onFocus={e => e.target.style.borderColor = '#007A3D'}
@@ -385,7 +331,6 @@ export default function NewSale() {
               </div>
             </div>
 
-            {/* الدفع */}
             {saleItems.length > 0 && (
               <div>
                 <p style={{ fontSize: '10px', color: '#444', letterSpacing: '2px', textTransform: 'uppercase', textAlign: 'right', marginBottom: '12px' }}>الدفع</p>
@@ -394,8 +339,7 @@ export default function NewSale() {
                     <span style={{ color: '#CE1126', fontWeight: 900, fontSize: '22px' }}>€{total.toFixed(2)}</span>
                     <span style={{ color: '#444', fontSize: '12px' }}>المجموع</span>
                   </div>
-                  <input type="text" inputMode="decimal" placeholder="كم دفع؟ €"
-                    value={cashReceived}
+                  <input type="text" inputMode="decimal" placeholder="كم دفع؟ €" value={cashReceived}
                     onChange={e => setCashReceived(e.target.value)}
                     style={{ width: '100%', background: '#161616', border: '1.5px solid #222', borderRadius: '12px', padding: '12px 14px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box' }}
                     onFocus={e => e.target.style.borderColor = '#007A3D'}
@@ -421,18 +365,12 @@ export default function NewSale() {
 
             {saleItems.length > 0 && (
               <button type="submit" disabled={loading}
-                style={{
-                  width: '100%', padding: '18px', borderRadius: '18px', border: 'none',
-                  background: loading ? '#1a1a1a' : 'linear-gradient(135deg, #CE1126, #a00d1e)',
-                  color: loading ? '#333' : 'white', fontWeight: 900, fontSize: '16px',
-                  cursor: loading ? 'not-allowed' : 'pointer'
-                }}>
+                style={{ width: '100%', padding: '18px', borderRadius: '18px', border: 'none', background: loading ? '#1a1a1a' : 'linear-gradient(135deg, #CE1126, #a00d1e)', color: loading ? '#333' : 'white', fontWeight: 900, fontSize: '16px', cursor: loading ? 'not-allowed' : 'pointer' }}>
                 {loading ? '...' : 'تسجيل البيع ←'}
               </button>
             )}
           </>
         )}
-
       </form>
 
       <div style={{ height: '4px', background: 'linear-gradient(90deg, #CE1126 25%, #007A3D 25%, #007A3D 50%, #fff 50%, #fff 75%, #000 75%)', position: 'fixed', bottom: 0, width: '100%' }} />
