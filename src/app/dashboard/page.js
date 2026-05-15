@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useRouter } from 'next/navigation';
+import { useAutoLogout } from '../lib/useAutoLogout';
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
@@ -17,6 +18,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ today: 0, cash: 0, debt: 0 });
   const [recentTxns, setRecentTxns] = useState([]);
   const router = useRouter();
+  useAutoLogout();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
