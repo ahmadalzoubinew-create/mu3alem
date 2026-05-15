@@ -2,8 +2,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
-export default function NewSale() {
+function NewSaleContent() {
   const [customers, setCustomers] = useState([]);
   const [topByCount, setTopByCount] = useState([]);
   const [topByValue, setTopByValue] = useState([]);
@@ -375,5 +376,13 @@ export default function NewSale() {
 
       <div style={{ height: '4px', background: 'linear-gradient(90deg, #CE1126 25%, #007A3D 25%, #007A3D 50%, #fff 50%, #fff 75%, #000 75%)', position: 'fixed', bottom: 0, width: '100%' }} />
     </div>
+  );
+}
+
+export default function NewSale() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#080808' }} />}>
+      <NewSaleContent />
+    </Suspense>
   );
 }
