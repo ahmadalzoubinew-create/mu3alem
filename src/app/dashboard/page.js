@@ -2,17 +2,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useRouter } from 'next/navigation';
-import { parseDecimal } from '../lib/formatNumber';
 import { useAutoLogout } from '../lib/useAutoLogout';
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
-  const [inventoryItems, setInventoryItems] = useState([]);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
-  const [selectedItems, setSelectedItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [pressed, setPressed] = useState(null);
@@ -26,12 +23,10 @@ export default function Dashboard() {
       if (!session) router.push('/login');
       else setUser(session.user);
     });
-    fetchInventory();
     fetchStats();
     fetchRecentTxns();
   }, [router]);
 
-  // تحديث تلقائي كل 30 ثانية
   useEffect(() => {
     const interval = setInterval(() => {
       fetchStats();
@@ -67,61 +62,20 @@ export default function Dashboard() {
     if (data) setRecentTxns(data);
   }
 
-  async function fetchInventory() {
-    const { data } = await supabase
-      .from('inventory')
-      .select('*')
-      .eq('is_active', true)
-      .order('name');
-    if (data) setInventoryItems(data);
-  }
-
-  function toggleItem(item) {
-    const exists = selectedItems.find(i => i.inventoryId === item.id);
-    if (exists) {
-      setSelectedItems(selectedItems.filter(i => i.inventoryId !== item.id));
-    } else {
-      setSelectedItems([...selectedItems, {
-        inventoryId: item.id, name: item.name,
-        unit: item.default_unit, quantity: '', price: ''
-      }]);
-    }
-  }
-
-  function updateItemField(inventoryId, field, value) {
-    setSelectedItems(selectedItems.map(i =>
-      i.inventoryId === inventoryId ? { ...i, [field]: value } : i
-    ));
-  }
-
   async function handleAddCustomer(e) {
     e.preventDefault();
     setLoading(true);
     setMsg('');
-    const { data: newCustomer, error } = await supabase
+    const { error } = await supabase
       .from('customers')
-      .insert({ name, phone, notes, created_by: user.id })
-      .select()
-      .single();
+      .insert({ name, phone, notes, created_by: user.id });
     if (error) {
       setMsg('صار خطأ، جرب مرة ثانية');
       setLoading(false);
       return;
     }
-    for (const item of selectedItems) {
-      const qty = parseDecimal(item.quantity);
-      const price = parseDecimal(item.price);
-      if (!qty || !price) continue;
-      await supabase.from('price_memory').upsert({
-        customer_id: newCustomer.id,
-        inventory_id: item.inventoryId,
-        quantity: qty, unit: item.unit,
-        unit_price: price, total_price: qty * price,
-        last_used_at: new Date().toISOString(), use_count: 1,
-      }, { onConflict: 'customer_id,inventory_id,quantity,unit' });
-    }
     setMsg('كبرت الشبكة يا معلم 🤝');
-    setName(''); setPhone(''); setNotes(''); setSelectedItems([]);
+    setName(''); setPhone(''); setNotes('');
     setTimeout(() => { setShowAddCustomer(false); setMsg(''); }, 1500);
     setLoading(false);
   }
@@ -131,7 +85,6 @@ export default function Dashboard() {
     router.push('/login');
   }
 
-  const unitLabel = { pcs: 'قطعة', g: 'غرام', ctn: 'كرتون' };
   const now = new Date();
   const dateStr = now.toLocaleDateString('ar', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -295,67 +248,12 @@ export default function Dashboard() {
                   onFocus={e => e.target.style.borderColor = '#CE1126'}
                   onBlur={e => e.target.style.borderColor = '#222'}
                 />
-                <textarea
-                  placeholder="ملاحظات (اختياري)"
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  rows={2}
+                <textarea placeholder="ملاحظات (اختياري)" value={notes}
+                  onChange={e => setNotes(e.target.value)} rows={2}
                   style={{ width: '100%', background: '#161616', border: '1.5px solid #222', borderRadius: '16px', padding: '14px 16px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box', resize: 'none', fontFamily: 'system-ui' }}
                   onFocus={e => e.target.style.borderColor = '#CE1126'}
                   onBlur={e => e.target.style.borderColor = '#222'}
                 />
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ flex: 1, height: '1px', background: '#1a1a1a' }} />
-                  <span style={{ fontSize: '11px', color: '#333' }}>الاصناف</span>
-                  <div style={{ flex: 1, height: '1px', background: '#1a1a1a' }} />
-                </div>
-
-                {inventoryItems.map(item => {
-                  const selected = selectedItems.find(i => i.inventoryId === item.id);
-                  return (
-                    <div key={item.id} style={{
-                      borderRadius: '16px',
-                      border: `1.5px solid ${selected ? '#CE1126' : '#1a1a1a'}`,
-                      background: selected ? 'rgba(206,17,38,0.06)' : '#111',
-                      overflow: 'hidden', transition: 'all 0.15s'
-                    }}>
-                      <button type="button" onClick={() => toggleItem(item)}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                        <div style={{
-                          width: '22px', height: '22px', borderRadius: '50%',
-                          border: `2px solid ${selected ? '#CE1126' : '#333'}`,
-                          background: selected ? '#CE1126' : 'transparent',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                        }}>
-                          {selected && <span style={{ color: 'white', fontSize: '11px', fontWeight: 900 }}>✓</span>}
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ color: 'white', fontSize: '14px', fontWeight: 700 }}>{item.name}</div>
-                          <div style={{ color: '#444', fontSize: '11px' }}>{unitLabel[item.default_unit]}</div>
-                        </div>
-                      </button>
-                      {selected && (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', padding: '0 14px 14px' }}>
-                          <input type="text" inputMode="decimal" placeholder="الكمية"
-                            value={selected.quantity}
-                            onChange={e => updateItemField(item.id, 'quantity', e.target.value)}
-                            style={{ background: '#0a0a0a', border: '1.5px solid #222', borderRadius: '12px', padding: '10px 12px', color: 'white', fontSize: '13px', textAlign: 'right', outline: 'none', width: '100%', boxSizing: 'border-box' }}
-                            onFocus={e => e.target.style.borderColor = '#CE1126'}
-                            onBlur={e => e.target.style.borderColor = '#222'}
-                          />
-                          <input type="text" inputMode="decimal" placeholder="السعر €"
-                            value={selected.price}
-                            onChange={e => updateItemField(item.id, 'price', e.target.value)}
-                            style={{ background: '#0a0a0a', border: '1.5px solid #222', borderRadius: '12px', padding: '10px 12px', color: 'white', fontSize: '13px', textAlign: 'right', outline: 'none', width: '100%', boxSizing: 'border-box' }}
-                            onFocus={e => e.target.style.borderColor = '#007A3D'}
-                            onBlur={e => e.target.style.borderColor = '#222'}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
 
                 {msg && (
                   <div style={{ textAlign: 'center', fontSize: '13px', fontWeight: 700, color: msg.includes('خطأ') ? '#CE1126' : '#007A3D', padding: '8px', borderRadius: '12px', background: msg.includes('خطأ') ? 'rgba(206,17,38,0.1)' : 'rgba(0,122,61,0.1)' }}>
