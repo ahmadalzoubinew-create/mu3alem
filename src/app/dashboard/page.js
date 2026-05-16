@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useRouter } from 'next/navigation';
+import { parseDecimal } from './lib/formatNumber';
 import { useAutoLogout } from '../lib/useAutoLogout';
 
 export default function Dashboard() {
@@ -108,8 +109,8 @@ export default function Dashboard() {
       return;
     }
     for (const item of selectedItems) {
-      const qty = parseFloat(item.quantity);
-      const price = parseFloat(item.price);
+      const qty = parseDecimal(item.quantity);
+      const price = parseDecimal(item.price);
       if (!qty || !price) continue;
       await supabase.from('price_memory').upsert({
         customer_id: newCustomer.id,
