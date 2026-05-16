@@ -28,6 +28,20 @@ export default function Dashboard() {
   }, [router]);
 
   useEffect(() => {
+    const handleFocus = () => {
+      fetchStats();
+      fetchRecentTxns();
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) handleFocus();
+    });
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       fetchStats();
       fetchRecentTxns();
