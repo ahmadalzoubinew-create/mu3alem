@@ -165,7 +165,29 @@ export default function Dashboard() {
           border="rgba(29,111,164,0.3)"
           onClick={() => router.push('/collect-cash')} />
       </div>
-
+{/* Reports & Settlement */}
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+  <button onClick={() => router.push('/reports')} style={{
+    padding: '14px', borderRadius: '16px',
+    border: '1.5px solid rgba(136,136,136,0.3)',
+    background: 'rgba(255,255,255,0.03)',
+    color: '#888', fontWeight: 700, fontSize: '13px',
+    cursor: 'pointer', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', gap: '6px',
+  }}>
+    📊 تقارير
+  </button>
+  <button onClick={() => router.push('/settlement')} style={{
+    padding: '14px', borderRadius: '16px',
+    border: '1.5px solid rgba(232,151,30,0.3)',
+    background: 'rgba(232,151,30,0.05)',
+    color: '#e8971e', fontWeight: 700, fontSize: '13px',
+    cursor: 'pointer', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', gap: '6px',
+  }}>
+    🤝 تسوية
+  </button>
+</div>
       {/* Add Customer Quick Button */}
       <button onClick={() => setShowAddCustomer(true)} style={{
         width: '100%', padding: '14px', borderRadius: '16px',
