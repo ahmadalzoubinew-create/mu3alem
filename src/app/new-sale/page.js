@@ -312,13 +312,13 @@ function NewSaleContent() {
                       </button>
                       {selected && (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', padding: '0 14px 14px' }}>
-                          <input type="text" inputMode="decimal" placeholder="الكمية" value={selected.quantity}
+                          <input type="text" inputMode="numeric" placeholder="الكمية" value={selected.quantity}
                             onChange={e => updateField(item.id, 'quantity', e.target.value)}
                             style={{ background: '#0a0a0a', border: '1.5px solid #222', borderRadius: '12px', padding: '10px 12px', color: 'white', fontSize: '13px', textAlign: 'right', outline: 'none', width: '100%', boxSizing: 'border-box' }}
                             onFocus={e => e.target.style.borderColor = '#CE1126'}
                             onBlur={e => e.target.style.borderColor = '#222'}
                           />
-                          <input type="text" inputMode="decimal" placeholder="السعر €" value={selected.price}
+                          <input type="text" inputMode="numeric" placeholder="السعر €" value={selected.price}
                             onChange={e => updateField(item.id, 'price', e.target.value)}
                             style={{ background: '#0a0a0a', border: '1.5px solid #222', borderRadius: '12px', padding: '10px 12px', color: 'white', fontSize: '13px', textAlign: 'right', outline: 'none', width: '100%', boxSizing: 'border-box' }}
                             onFocus={e => e.target.style.borderColor = '#007A3D'}
@@ -340,7 +340,7 @@ function NewSaleContent() {
                     <span style={{ color: '#CE1126', fontWeight: 900, fontSize: '22px' }}>€{total.toFixed(2)}</span>
                     <span style={{ color: '#444', fontSize: '12px' }}>المجموع</span>
                   </div>
-                  <input type="text" inputMode="decimal" placeholder="كم دفع؟ €" value={cashReceived}
+                  <input type="text" inputMode="numeric" placeholder="كم دفع؟ €" value={cashReceived}
                     onChange={e => setCashReceived(e.target.value)}
                     style={{ width: '100%', background: '#161616', border: '1.5px solid #222', borderRadius: '12px', padding: '12px 14px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box' }}
                     onFocus={e => e.target.style.borderColor = '#007A3D'}

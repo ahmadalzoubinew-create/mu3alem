@@ -1,7 +1,3 @@
-/**
- * Converts Arabic/European decimal format to standard decimal
- * Converts: "7,5" → "7.5" and "٧٫٥" → "7.5"
- */
 export function parseDecimal(value) {
   if (!value) return 0;
   const cleaned = value
@@ -10,6 +6,7 @@ export function parseDecimal(value) {
     .replace(/٣/g, '3').replace(/٤/g, '4').replace(/٥/g, '5')
     .replace(/٦/g, '6').replace(/٧/g, '7').replace(/٨/g, '8')
     .replace(/٩/g, '9')
-    .replace(',', '.');
+    .replace(/,/g, '.')
+    .replace(/[^0-9.]/g, '');
   return parseFloat(cleaned) || 0;
 }
