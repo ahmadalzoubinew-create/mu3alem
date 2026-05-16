@@ -97,16 +97,22 @@ function NewSaleContent() {
       setSaleItems([...saleItems, {
         inventoryId: item.id, name: item.name,
         unit: item.default_unit, quantity: '', price: '',
+        maxQty: parseDecimal(item.stock_quantity),
       }]);
     }
   }
 
   function updateField(inventoryId, field, value) {
-  const normalized = value.replace(',', '.');
-  setSaleItems(saleItems.map(i =>
-    i.inventoryId === inventoryId ? { ...i, [field]: normalized } : i
-  ));
-}
+    const normalized = value.replace(/[,،]/g, '.');
+    if (field === 'quantity') {
+      const item = inventory.find(i => i.id === inventoryId);
+      const maxQty = item ? parseDecimal(item.stock_quantity) : 999999;
+      if (parseDecimal(normalized) > maxQty) return;
+    }
+    setSaleItems(saleItems.map(i =>
+      i.inventoryId === inventoryId ? { ...i, [field]: normalized } : i
+    ));
+  }
 
   const total = saleItems.reduce((sum, i) =>
     sum + ((parseDecimal(i.quantity) || 0) * (parseDecimal(i.price) || 0)), 0);
@@ -139,13 +145,13 @@ function NewSaleContent() {
         }, { onConflict: 'customer_id,inventory_id,quantity,unit' });
       }
       setMsg('هيك الشغل ولا بلاش! 💸');
-      setTimeout(() => router.push('/dashboard'), 1500);
+      setTimeout(() => window.location.href = '/dashboard', 1500);
     } catch (err) {
       console.error('Sale error:', err);
       setMsg('صار خطأ: ' + (err.message || JSON.stringify(err)));
     }
     setLoading(false);
-   }
+  }
 
   const unitLabel = { pcs: 'قطعة', g: 'غرام', ctn: 'كرتون' };
   const filteredCustomers = search.trim()
@@ -300,6 +306,7 @@ function NewSaleContent() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {inventory.map(item => {
                   const selected = saleItems.find(i => i.inventoryId === item.id);
+                  const maxQty = parseDecimal(item.stock_quantity);
                   return (
                     <div key={item.id} style={{ borderRadius: '16px', border: `1.5px solid ${selected ? '#CE1126' : '#1a1a1a'}`, background: selected ? 'rgba(206,17,38,0.05)' : '#0f0f0f', overflow: 'hidden', transition: 'all 0.15s' }}>
                       <button type="button" onClick={() => toggleInventoryItem(item)}
@@ -309,23 +316,34 @@ function NewSaleContent() {
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <div style={{ color: 'white', fontWeight: 700, fontSize: '14px' }}>{item.name}</div>
-                          <div style={{ color: '#444', fontSize: '11px' }}>{unitLabel[item.default_unit]}</div>
+                          <div style={{ color: '#444', fontSize: '11px' }}>
+                            {unitLabel[item.default_unit]} · متوفر: {maxQty}
+                          </div>
                         </div>
                       </button>
                       {selected && (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', padding: '0 14px 14px' }}>
-                          <input type="text" inputMode="numeric" placeholder="الكمية" value={selected.quantity}
-                            onChange={e => updateField(item.id, 'quantity', e.target.value)}
-                            style={{ background: '#0a0a0a', border: '1.5px solid #222', borderRadius: '12px', padding: '10px 12px', color: 'white', fontSize: '13px', textAlign: 'right', outline: 'none', width: '100%', boxSizing: 'border-box' }}
-                            onFocus={e => e.target.style.borderColor = '#CE1126'}
-                            onBlur={e => e.target.style.borderColor = '#222'}
-                          />
-                          <input type="text" inputMode="numeric" placeholder="السعر €" value={selected.price}
-                            onChange={e => updateField(item.id, 'price', e.target.value)}
-                            style={{ background: '#0a0a0a', border: '1.5px solid #222', borderRadius: '12px', padding: '10px 12px', color: 'white', fontSize: '13px', textAlign: 'right', outline: 'none', width: '100%', boxSizing: 'border-box' }}
-                            onFocus={e => e.target.style.borderColor = '#007A3D'}
-                            onBlur={e => e.target.style.borderColor = '#222'}
-                          />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '0 14px 14px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <input type="text" inputMode="decimal" placeholder="الكمية"
+                              value={selected.quantity}
+                              onChange={e => updateField(item.id, 'quantity', e.target.value)}
+                              style={{ background: '#0a0a0a', border: '1.5px solid #222', borderRadius: '12px', padding: '10px 12px', color: 'white', fontSize: '13px', textAlign: 'right', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                              onFocus={e => e.target.style.borderColor = '#CE1126'}
+                              onBlur={e => e.target.style.borderColor = '#222'}
+                            />
+                            <input type="text" inputMode="decimal" placeholder="السعر €"
+                              value={selected.price}
+                              onChange={e => updateField(item.id, 'price', e.target.value)}
+                              style={{ background: '#0a0a0a', border: '1.5px solid #222', borderRadius: '12px', padding: '10px 12px', color: 'white', fontSize: '13px', textAlign: 'right', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                              onFocus={e => e.target.style.borderColor = '#007A3D'}
+                              onBlur={e => e.target.style.borderColor = '#222'}
+                            />
+                          </div>
+                          {parseDecimal(selected.quantity) > maxQty && (
+                            <div style={{ background: 'rgba(206,17,38,0.1)', border: '1px solid rgba(206,17,38,0.2)', borderRadius: '10px', padding: '6px 10px', textAlign: 'right' }}>
+                              <span style={{ color: '#CE1126', fontSize: '11px' }}>الكمية المتوفرة: {maxQty} فقط!</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -342,8 +360,14 @@ function NewSaleContent() {
                     <span style={{ color: '#CE1126', fontWeight: 900, fontSize: '22px' }}>€{total.toFixed(2)}</span>
                     <span style={{ color: '#444', fontSize: '12px' }}>المجموع</span>
                   </div>
-                  <input type="text" inputMode="numeric" placeholder="كم دفع؟ €" value={cashReceived}
-                  onChange={e => setCashReceived(e.target.value.replace(',', '.'))}                    style={{ width: '100%', background: '#161616', border: '1.5px solid #222', borderRadius: '12px', padding: '12px 14px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box' }}
+                  <input type="text" inputMode="decimal" placeholder="كم دفع؟ €"
+                    value={cashReceived}
+                    onChange={e => {
+                      const val = e.target.value.replace(/[,،]/g, '.');
+                      if (parseDecimal(val) > total) return;
+                      setCashReceived(val);
+                    }}
+                    style={{ width: '100%', background: '#161616', border: '1.5px solid #222', borderRadius: '12px', padding: '12px 14px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box' }}
                     onFocus={e => e.target.style.borderColor = '#007A3D'}
                     onBlur={e => e.target.style.borderColor = '#222'}
                   />
