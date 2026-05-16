@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import { parseDecimal } from '../lib/formatNumber';
 
 function NewSaleContent() {
   const [customers, setCustomers] = useState([]);
@@ -40,7 +41,6 @@ function NewSaleContent() {
     if (custs) setCustomers(custs);
     if (inv) setInventory(inv);
 
-    // لو جاي من صفحة الزبائن — انتخب الزبون تلقائياً
     const customerId = searchParams.get('customer');
     if (customerId && custs) {
       const preSelected = custs.find(c => c.id === customerId);
@@ -52,7 +52,7 @@ function NewSaleContent() {
       const valueMap = {};
       txns.forEach(t => {
         countMap[t.customer_id] = (countMap[t.customer_id] || 0) + 1;
-        valueMap[t.customer_id] = (valueMap[t.customer_id] || 0) + parseFloat(t.total_amount);
+        valueMap[t.customer_id] = (valueMap[t.customer_id] || 0) + parseDecimal(t.total_amount);
       });
       const custMap = {};
       custs.forEach(c => custMap[c.id] = c);
@@ -75,7 +75,7 @@ function NewSaleContent() {
       supabase.from('transactions').select('*, inventory(name)').eq('customer_id', customer.id).eq('status', 'completed').order('created_at', { ascending: false }).limit(5),
     ]);
 
-    setCustomerDebt(parseFloat(customer.total_debt) || 0);
+    setCustomerDebt(parseDecimal(customer.total_debt) || 0);
     setCustomerLastSales(lastSales || []);
 
     if (memories && memories.length > 0) {
@@ -108,8 +108,8 @@ function NewSaleContent() {
   }
 
   const total = saleItems.reduce((sum, i) =>
-    sum + ((parseFloat(i.quantity) || 0) * (parseFloat(i.price) || 0)), 0);
-  const debt = Math.max(0, total - (parseFloat(cashReceived) || 0));
+    sum + ((parseDecimal(i.quantity) || 0) * (parseDecimal(i.price) || 0)), 0);
+  const debt = Math.max(0, total - (parseDecimal(cashReceived) || 0));
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -117,8 +117,8 @@ function NewSaleContent() {
     setLoading(true);
     try {
       for (const item of saleItems) {
-        const qty = parseFloat(item.quantity);
-        const price = parseFloat(item.price);
+        const qty = parseDecimal(item.quantity);
+        const price = parseDecimal(item.price);
         if (!qty || !price) continue;
         await supabase.from('transactions').insert({
           customer_id: selectedCustomer.id,
@@ -126,7 +126,7 @@ function NewSaleContent() {
           inventory_id: item.inventoryId,
           quantity: qty, unit: item.unit,
           unit_price: price, total_amount: qty * price,
-          cash_received: parseFloat(cashReceived) || 0,
+          cash_received: parseDecimal(cashReceived) || 0,
           status: 'completed',
         });
         await supabase.from('price_memory').upsert({
@@ -164,8 +164,8 @@ function NewSaleContent() {
           transition: 'all 0.15s'
         }}>
         <div style={{ textAlign: 'left' }}>
-          {parseFloat(c.total_debt) > 0 && (
-            <span style={{ fontSize: '11px', color: '#CE1126', fontWeight: 700 }}>€{parseFloat(c.total_debt).toFixed(2)}</span>
+          {parseDecimal(c.total_debt) > 0 && (
+            <span style={{ fontSize: '11px', color: '#CE1126', fontWeight: 700 }}>€{parseDecimal(c.total_debt).toFixed(2)}</span>
           )}
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -266,14 +266,14 @@ function NewSaleContent() {
                       {customerLastSales.map(s => (
                         <div key={s.id} style={{ background: '#111', borderRadius: '12px', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div style={{ textAlign: 'left' }}>
-                            {parseFloat(s.credit_amount) > 0 && (
-                              <span style={{ color: '#CE1126', fontSize: '12px', fontWeight: 700 }}>دين: €{parseFloat(s.credit_amount).toFixed(2)}</span>
+                            {parseDecimal(s.credit_amount) > 0 && (
+                              <span style={{ color: '#CE1126', fontSize: '12px', fontWeight: 700 }}>دين: €{parseDecimal(s.credit_amount).toFixed(2)}</span>
                             )}
                             <div style={{ color: '#333', fontSize: '10px' }}>{new Date(s.created_at).toLocaleDateString('ar')}</div>
                           </div>
                           <div style={{ textAlign: 'right' }}>
                             <div style={{ color: 'white', fontSize: '13px', fontWeight: 700 }}>{s.inventory?.name}</div>
-                            <div style={{ color: '#555', fontSize: '11px' }}>€{parseFloat(s.total_amount).toFixed(2)}</div>
+                            <div style={{ color: '#555', fontSize: '11px' }}>€{parseDecimal(s.total_amount).toFixed(2)}</div>
                           </div>
                         </div>
                       ))}

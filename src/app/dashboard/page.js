@@ -30,6 +30,15 @@ export default function Dashboard() {
     fetchRecentTxns();
   }, [router]);
 
+  // تحديث تلقائي كل 30 ثانية
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchStats();
+      fetchRecentTxns();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   async function fetchStats() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
