@@ -140,11 +140,12 @@ function NewSaleContent() {
       }
       setMsg('هيك الشغل ولا بلاش! 💸');
       setTimeout(() => router.push('/dashboard'), 1500);
-    } catch {
-      setMsg('صار خطأ، جرب مرة ثانية');
+    } catch (err) {
+      console.error('Sale error:', err);
+      setMsg('صار خطأ: ' + (err.message || JSON.stringify(err)));
     }
     setLoading(false);
-  }
+   }
 
   const unitLabel = { pcs: 'قطعة', g: 'غرام', ctn: 'كرتون' };
   const filteredCustomers = search.trim()
