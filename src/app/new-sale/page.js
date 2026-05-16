@@ -102,10 +102,11 @@ function NewSaleContent() {
   }
 
   function updateField(inventoryId, field, value) {
-    setSaleItems(saleItems.map(i =>
-      i.inventoryId === inventoryId ? { ...i, [field]: value } : i
-    ));
-  }
+  const normalized = value.replace(',', '.');
+  setSaleItems(saleItems.map(i =>
+    i.inventoryId === inventoryId ? { ...i, [field]: normalized } : i
+  ));
+}
 
   const total = saleItems.reduce((sum, i) =>
     sum + ((parseDecimal(i.quantity) || 0) * (parseDecimal(i.price) || 0)), 0);
@@ -341,8 +342,7 @@ function NewSaleContent() {
                     <span style={{ color: '#444', fontSize: '12px' }}>المجموع</span>
                   </div>
                   <input type="text" inputMode="numeric" placeholder="كم دفع؟ €" value={cashReceived}
-                    onChange={e => setCashReceived(e.target.value)}
-                    style={{ width: '100%', background: '#161616', border: '1.5px solid #222', borderRadius: '12px', padding: '12px 14px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box' }}
+                  onChange={e => setCashReceived(e.target.value.replace(',', '.'))}                    style={{ width: '100%', background: '#161616', border: '1.5px solid #222', borderRadius: '12px', padding: '12px 14px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box' }}
                     onFocus={e => e.target.style.borderColor = '#007A3D'}
                     onBlur={e => e.target.style.borderColor = '#222'}
                   />
