@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useRouter } from 'next/navigation';
-import { parseDecimal } from './lib/formatNumber';
+import { parseDecimal } from '../lib/formatNumber';
 import { useAutoLogout } from '../lib/useAutoLogout';
 
 export default function Dashboard() {
