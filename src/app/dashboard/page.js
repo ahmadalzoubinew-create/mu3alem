@@ -63,6 +63,7 @@ function BigBtn({ emoji, label, sub, color, bg, border, onClick }) {
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
   const [stats, setStats] = useState({ today: 0, cash: 0, debt: 0 });
   const [recentTxns, setRecentTxns] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -103,7 +104,13 @@ export default function Dashboard() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) router.push('/login');
-      else setUser(session.user);
+      if (!session) router.push('/login');
+      else {
+        setUser(session.user);
+        supabase.from('users').select('display_name,full_name')
+          .eq('id', session.user.id).single()
+          .then(({ data }) => setUserProfile(data));
+      }
     });
     fetchAll();
     // Refresh on visibility change (return from sale page)
@@ -348,6 +355,11 @@ export default function Dashboard() {
           <div style={{ fontFamily: 'Georgia, serif', fontSize: '28px',
             color: '#CE1126', fontWeight: 900, lineHeight: 1 }}>مُعلم</div>
           <div style={{ fontSize: '10px', color: '#444' }}>{dateStr}</div>
+          {userProfile && (
+            <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
+              👤 {userProfile.display_name || userProfile.full_name}
+            </div>
+          )}
         </div>
       </div>
 
