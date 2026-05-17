@@ -57,7 +57,44 @@ export default function Customers() {
     fetchCustomers();
   }
 
+  async function sendWhatsAppStatement() {
+    if (!selected?.phone) {
+      alert('هاد الزبون ما عنده رقم هاتف!');
+      return;
+    }
+
+    // جيب العمليات اللي فيها دين فقط
+    const openTxns = txns.filter(t => parseFloat(t.credit_amount) > 0);
+
+    if (openTxns.length === 0) {
+      alert('ما في ديون مفتوحة لهاد الزبون.');
+      return;
+    }
+
+    const totalDebt = parseFloat(selected.total_debt || 0).toFixed(2);
+
+    // بناء الرسالة
+    let msg = `Hallo ${selected.name}, hier ist Ihre aktuelle Kontoübersicht (Offene Beträge):\n\n`;
+
+    openTxns.forEach(t => {
+      const date = new Date(t.created_at).toLocaleDateString('de-DE');
+      const item = t.inventory?.name || '—';
+      const qty  = `${parseFloat(t.quantity)} ${t.unit || ''}`.trim();
+      const open = parseFloat(t.credit_amount).toFixed(2);
+      msg += `📅 ${date}\n📦 Artikel: ${item} (${qty})\n🔴 Offen: ${open} €\n\n`;
+    });
+
+    msg += `💰 Gesamtsumme (Offen): ${totalDebt} €\n\nVielen Dank!`;
+
+    // تنظيف رقم الهاتف وفتح واتساب
+    const phone = selected.phone.replace(/[\s\-\+]/g, '');
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  }
+
   const filtered = search.trim()
+    ? customers.filter(c => c.name.includes(search) || (c.phone && c.phone.includes(search)))
+    : customers;
     ? customers.filter(c => c.name.includes(search) || (c.phone && c.phone.includes(search)))
     : customers;
 
@@ -160,9 +197,17 @@ export default function Customers() {
 
           {/* زر بيع جديد */}
           <button onClick={() => router.push(`/new-sale?customer=${selected.id}`)}
-            style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1.5px solid #CE1126', background: 'rgba(206,17,38,0.08)', color: '#CE1126', fontWeight: 700, fontSize: '14px', cursor: 'pointer', marginBottom: '16px' }}>
+            style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1.5px solid #CE1126', background: 'rgba(206,17,38,0.08)', color: '#CE1126', fontWeight: 700, fontSize: '14px', cursor: 'pointer', marginBottom: '10px' }}>
             بيع جديد لهاد الزبون ←
           </button>
+
+          {/* زر كشف الحساب واتساب */}
+          {parseFloat(selected.total_debt) > 0 && (
+            <button onClick={sendWhatsAppStatement}
+              style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1.5px solid #25D366', background: 'rgba(37,211,102,0.07)', color: '#25D366', fontWeight: 700, fontSize: '13px', cursor: 'pointer', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '16px' }}>📲</span> Kontoauszug per WhatsApp senden
+            </button>
+          )}
 
           {/* سجل العمليات */}
           <p style={{ fontSize: '10px', color: '#333', letterSpacing: '2px', textTransform: 'uppercase', textAlign: 'right', marginBottom: '10px' }}>سجل العمليات</p>
