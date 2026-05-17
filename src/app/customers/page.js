@@ -18,13 +18,15 @@ export default function Customers() {
   useEffect(() => { fetchCustomers(); }, []);
 
   async function fetchCustomers() {
-    const { data } = await supabase
-      .from('customers')
-      .select('*, transactions(count)')
-      .eq('transactions.status', 'completed');
-    if (data) {
-      const sorted = data
-        .map(c => ({ ...c, txnCount: c.transactions?.[0]?.count || 0 }))
+    const [{ data: custs }, { data: txns }] = await Promise.all([
+      supabase.from('customers').select('*'),
+      supabase.from('transactions').select('customer_id').eq('status', 'completed'),
+    ]);
+    if (custs) {
+      const countMap = {};
+      txns?.forEach(t => { countMap[t.customer_id] = (countMap[t.customer_id] || 0) + 1; });
+      const sorted = custs
+        .map(c => ({ ...c, txnCount: countMap[c.id] || 0 }))
         .sort((a, b) => b.txnCount - a.txnCount);
       setCustomers(sorted);
     }
@@ -141,13 +143,29 @@ export default function Customers() {
               </div>
             )}
 
-            {/* أكثر 20 زبون نشاطاً */}
-            {!search.trim() && filtered.slice(0, 20).filter(c => c.txnCount > 0).length > 0 && (
-              <div style={{ fontSize: '10px', color: '#e8971e', letterSpacing: '2px',
-                textTransform: 'uppercase', textAlign: 'right', marginBottom: '4px' }}>
-                ⭐ الأكثر نشاطاً
+            {/* أكثر 20 زبون نشاطاً — bubble buttons */}
+            {!search.trim() && filtered.filter(c => c.txnCount > 0).length > 0 && (
+              <div style={{ marginBottom: '8px' }}>
+                <p style={{ fontSize: '10px', color: '#e8971e', letterSpacing: '1px',
+                  textAlign: 'right', marginBottom: '8px' }}>⭐ الأكثر نشاطاً</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end' }}>
+                  {filtered.filter(c => c.txnCount > 0).slice(0, 20).map(c => (
+                    <button key={`top-${c.id}`} onClick={() => openCustomer(c)}
+                      style={{ padding: '8px 14px', borderRadius: '20px',
+                        border: '1.5px solid rgba(232,151,30,0.4)',
+                        background: 'rgba(232,151,30,0.08)',
+                        color: '#e8971e', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
+
+            <p style={{ fontSize: '10px', color: '#333', letterSpacing: '2px',
+              textTransform: 'uppercase', textAlign: 'right', marginBottom: '4px' }}>
+              كل الزبائن
+            </p>
 
             {filtered.map((c, i) => (
               <>
