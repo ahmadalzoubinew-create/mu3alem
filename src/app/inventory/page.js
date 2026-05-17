@@ -12,32 +12,15 @@ export default function Inventory() {
   const [unit, setUnit] = useState('pcs');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    checkRoleAndFetch();
+    init();
   }, []);
 
-  async function checkRoleAndFetch() {
+  async function init() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { router.push('/login'); return; }
-
-    const cachedRole = localStorage.getItem(`role_${session.user.id}`);
-    if (cachedRole) {
-      setIsAdmin(cachedRole === 'admin');
-      setMounted(true);
-      fetchItems();
-      return;
-    }
-
-    const { data: userData } = await supabase
-      .from('users').select('role').eq('id', session.user.id).single();
-    const role = userData?.role || 'salesman';
-    localStorage.setItem(`role_${session.user.id}`, role);
-    setIsAdmin(role === 'admin');
-    setMounted(true);
     fetchItems();
   }
 
@@ -83,8 +66,6 @@ export default function Inventory() {
 
   const unitLabel = { pcs: 'قطعة', g: 'غرام', ctn: 'كرتون' };
 
-  if (!mounted) return null;
-
   return (
     <div style={{ minHeight: '100vh', background: '#080808', color: 'white',
       fontFamily: 'system-ui', paddingBottom: '60px' }}>
@@ -107,17 +88,15 @@ export default function Inventory() {
         </div>
       </div>
 
-      {isAdmin && (
-        <div style={{ padding: '16px 20px 0', display: 'flex', justifyContent: 'flex-end' }}>
-          <button onClick={() => { setShowAdd(true); setEditItem(null);
-            setName(''); setQuantity(''); setUnit('pcs'); }}
-            style={{ background: 'rgba(232,151,30,0.15)', border: '1.5px solid #e8971e',
-              borderRadius: '14px', padding: '10px 16px', color: '#e8971e',
-              fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
-            + سلعة جديدة
-          </button>
-        </div>
-      )}
+      <div style={{ padding: '16px 20px 0', display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={() => { setShowAdd(true); setEditItem(null);
+          setName(''); setQuantity(''); setUnit('pcs'); }}
+          style={{ background: 'rgba(232,151,30,0.15)', border: '1.5px solid #e8971e',
+            borderRadius: '14px', padding: '10px 16px', color: '#e8971e',
+            fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
+          + سلعة جديدة
+        </button>
+      </div>
 
       <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {items.length === 0 && (
@@ -131,24 +110,20 @@ export default function Inventory() {
             borderRadius: '16px', padding: '14px 16px',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', gap: '8px' }}>
-              {isAdmin && (
-                <>
-                  <button onClick={() => openEdit(item)}
-                    style={{ background: 'rgba(232,151,30,0.1)',
-                      border: '1px solid rgba(232,151,30,0.3)', borderRadius: '10px',
-                      padding: '6px 12px', color: '#e8971e', fontSize: '12px',
-                      cursor: 'pointer' }}>
-                    تعديل
-                  </button>
-                  <button onClick={() => handleDelete(item.id)}
-                    style={{ background: 'rgba(206,17,38,0.1)',
-                      border: '1px solid rgba(206,17,38,0.3)', borderRadius: '10px',
-                      padding: '6px 12px', color: '#CE1126', fontSize: '12px',
-                      cursor: 'pointer' }}>
-                    حذف
-                  </button>
-                </>
-              )}
+              <button onClick={() => openEdit(item)}
+                style={{ background: 'rgba(232,151,30,0.1)',
+                  border: '1px solid rgba(232,151,30,0.3)', borderRadius: '10px',
+                  padding: '6px 12px', color: '#e8971e', fontSize: '12px',
+                  cursor: 'pointer' }}>
+                تعديل
+              </button>
+              <button onClick={() => handleDelete(item.id)}
+                style={{ background: 'rgba(206,17,38,0.1)',
+                  border: '1px solid rgba(206,17,38,0.3)', borderRadius: '10px',
+                  padding: '6px 12px', color: '#CE1126', fontSize: '12px',
+                  cursor: 'pointer' }}>
+                حذف
+              </button>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontWeight: 700, fontSize: '15px' }}>{item.name}</div>
@@ -166,7 +141,7 @@ export default function Inventory() {
         'linear-gradient(90deg, #CE1126 25%, #007A3D 25%, #007A3D 50%, #fff 50%, #fff 75%, #000 75%)',
         position: 'fixed', bottom: 0, width: '100%' }} />
 
-      {isAdmin && (showAdd || editItem) && (
+      {(showAdd || editItem) && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: '16px', background: 'rgba(0,0,0,0.92)' }}
