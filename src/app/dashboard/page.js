@@ -24,10 +24,12 @@ function NavTab({ icon, label, active, onClick }) {
 }
 
 // ─── KPI Card ─────────────────────────────────────────────
-function KpiCard({ label, value, color, bg, border }) {
+function KpiCard({ label, value, color, bg, border, onClick }) {
   return (
-    <div style={{ background: bg, border: `1.5px solid ${border}`,
-      borderRadius: '16px', padding: '14px 10px', textAlign: 'center', flex: 1 }}>
+    <div onClick={onClick}
+      style={{ background: bg, border: `1.5px solid ${border}`,
+        borderRadius: '16px', padding: '14px 10px', textAlign: 'center', flex: 1,
+        cursor: onClick ? 'pointer' : 'default' }}>
       <div style={{ fontSize: '10px', color: '#555', marginBottom: '4px',
         textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</div>
       <div style={{ fontSize: '20px', fontWeight: 900, color }}>{value}</div>
@@ -158,9 +160,11 @@ export default function Dashboard() {
         <KpiCard label="اليوم" value={f(stats.today)}
           color="#CE1126" bg="rgba(206,17,38,0.08)" border="rgba(206,17,38,0.2)" />
         <KpiCard label="كاش" value={f(stats.cash)}
-          color="#007A3D" bg="rgba(0,122,61,0.08)" border="rgba(0,122,61,0.2)" />
+          color="#007A3D" bg="rgba(0,122,61,0.08)" border="rgba(0,122,61,0.2)"
+          onClick={() => router.push('/reports?filter=cash')} />
         <KpiCard label="دين" value={f(stats.debt)}
-          color="#e8971e" bg="rgba(232,151,30,0.08)" border="rgba(232,151,30,0.2)" />
+          color="#e8971e" bg="rgba(232,151,30,0.08)" border="rgba(232,151,30,0.2)"
+          onClick={() => router.push('/reports?filter=debt')} />
       </div>
 
       {/* TWO BIG BUTTONS — thumb zone */}

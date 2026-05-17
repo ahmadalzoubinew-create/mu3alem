@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function Reports() {
   const [stats, setStats] = useState({ totalDebt: 0, totalCash: 0, totalInventory: 0 });
@@ -14,6 +14,8 @@ export default function Reports() {
   const [activeTab, setActiveTab] = useState('customers');
   const [search, setSearch] = useState('');
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const filter = searchParams.get('filter'); // 'cash' | 'debt' | null
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -61,9 +63,14 @@ export default function Reports() {
     if (data) setSalesmanTxns(data);
   }
 
-  const filteredCustomers = search.trim()
-    ? customers.filter(c => c.name.includes(search))
-    : customers;
+  const filteredCustomers = (() => {
+    let list = search.trim()
+      ? customers.filter(c => c.name.includes(search))
+      : customers;
+    if (filter === 'debt') list = list.filter(c => parseFloat(c.total_debt) > 0);
+    if (filter === 'cash') list = list.filter(c => parseFloat(c.total_debt) === 0);
+    return list;
+  })();
 
   return (
     <div style={{ minHeight: '100vh', background: '#080808', color: 'white', fontFamily: 'system-ui', paddingBottom: '60px' }}>
@@ -80,6 +87,8 @@ export default function Reports() {
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: '11px', color: '#888', letterSpacing: '2px', textTransform: 'uppercase' }}>Reports</div>
           <div style={{ fontSize: '20px', fontWeight: 900 }}>التقارير 📊</div>
+          {filter === 'debt' && <div style={{ fontSize: '11px', color: '#e8971e', marginTop: '2px' }}>عرض: الزبائن عليهم دين</div>}
+          {filter === 'cash' && <div style={{ fontSize: '11px', color: '#007A3D', marginTop: '2px' }}>عرض: الزبائن دفعوا كاش</div>}
         </div>
       </div>
 
