@@ -1,9 +1,9 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function Reports() {
+function ReportsContent() {
   const [stats, setStats] = useState({ totalDebt: 0, totalCash: 0, totalInventory: 0 });
   const [customers, setCustomers] = useState([]);
   const [salesmen, setSalesmen] = useState([]);
@@ -281,5 +281,13 @@ export default function Reports() {
 
       <div style={{ height: '4px', background: 'linear-gradient(90deg, #CE1126 25%, #007A3D 25%, #007A3D 50%, #fff 50%, #fff 75%, #000 75%)', position: 'fixed', bottom: 0, width: '100%' }} />
     </div>
+  );
+}
+
+export default function Reports() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", background: "#080808" }} />}>
+      <ReportsContent />
+    </Suspense>
   );
 }
