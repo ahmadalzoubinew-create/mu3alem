@@ -17,15 +17,27 @@ export default function Setup() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { router.push('/login'); return; }
 
-    const savedName = localStorage.getItem(`display_name_${session.user.id}`);
-    if (savedName) {
-      const { data: userData } = await supabase
-  .from('users').select('role').eq('id', session.user.id).single();
-localStorage.setItem(`role_${session.user.id}`, userData?.role || 'salesman');
+    // لو الـ role محفوظ بالـ cache روح مباشرة
+    const cachedRole = localStorage.getItem(`role_${session.user.id}`);
+    if (cachedRole) {
       router.push('/dashboard');
       return;
     }
 
+    // جيب الـ role من DB واحفظه
+    const { data: userData } = await supabase
+      .from('users').select('role, display_name').eq('id', session.user.id).single();
+
+    if (userData?.role) {
+      localStorage.setItem(`role_${session.user.id}`, userData.role);
+      if (userData.display_name) {
+        localStorage.setItem(`display_name_${session.user.id}`, userData.display_name);
+      }
+      router.push('/dashboard');
+      return;
+    }
+
+    // يوزر جديد ما عنده record بعد
     setChecking(false);
   }
 
@@ -56,6 +68,12 @@ localStorage.setItem(`role_${session.user.id}`, userData?.role || 'salesman');
         display_name: displayName.trim(),
         role: 'salesman',
       });
+      localStorage.setItem(`role_${session.user.id}`, 'salesman');
+    } else {
+      // جيب الـ role الحالي واحفظه
+      const { data: userData } = await supabase
+        .from('users').select('role').eq('id', session.user.id).single();
+      localStorage.setItem(`role_${session.user.id}`, userData?.role || 'salesman');
     }
 
     router.push('/dashboard');
