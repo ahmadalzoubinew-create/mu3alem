@@ -19,6 +19,9 @@ export default function Setup() {
 
     const savedName = localStorage.getItem(`display_name_${session.user.id}`);
     if (savedName) {
+      const { data: userData } = await supabase
+  .from('users').select('role').eq('id', session.user.id).single();
+localStorage.setItem(`role_${session.user.id}`, userData?.role || 'salesman');
       router.push('/dashboard');
       return;
     }
