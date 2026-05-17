@@ -1,7 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { getRandom } from '../lib/messages';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { parseDecimal } from '../lib/formatNumber';
@@ -122,8 +121,17 @@ function NewSaleContent() {
   async function handleSubmit(e) {
     e.preventDefault();
     if (!selectedCustomer || saleItems.length === 0) return;
+
+    // ── Validation: cash can't exceed total ──
+    const cashVal = parseDecimal(cashReceived) || 0;
+    if (cashVal > total) {
+      setMsg('الكاش المدخل أكثر من قيمة الفاتورة!');
+      return;
+    }
+
     setLoading(true);
     try {
+      let isFirstItem = true;
       for (const item of saleItems) {
         const qty = parseDecimal(item.quantity);
         const price = parseDecimal(item.price);
@@ -134,9 +142,11 @@ function NewSaleContent() {
           inventory_id: item.inventoryId,
           quantity: qty, unit: item.unit,
           unit_price: price, total_amount: qty * price,
-          cash_received: parseDecimal(cashReceived) || 0,
+          // الكاش بيتحط بأول منتج بس — الباقي صفر
+          cash_received: isFirstItem ? cashVal : 0,
           status: 'completed',
         });
+        isFirstItem = false;
         await supabase.from('price_memory').upsert({
           customer_id: selectedCustomer.id,
           inventory_id: item.inventoryId,
@@ -145,8 +155,7 @@ function NewSaleContent() {
           last_used_at: new Date().toISOString(), use_count: 1,
         }, { onConflict: 'customer_id,inventory_id,quantity,unit' });
       }
-      const m = getRandom('NEW_SALE');
-      setMsg(`${m.text} ${m.emoji}`);
+      setMsg('هيك الشغل ولا بلاش! 💸');
       setTimeout(() => window.location.href = '/dashboard', 1500);
     } catch (err) {
       console.error('Sale error:', err);
