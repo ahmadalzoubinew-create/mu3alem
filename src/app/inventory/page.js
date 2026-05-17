@@ -17,28 +17,29 @@ export default function Inventory() {
   const router = useRouter();
 
   useEffect(() => {
-   async function checkRoleAndFetch() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) { router.push('/login'); return; }
+    checkRoleAndFetch();
+  }, []);
 
-  // جرب من localStorage أول
-  const cachedRole = localStorage.getItem(`role_${session.user.id}`);
-  if (cachedRole) {
-    setIsAdmin(cachedRole === 'admin');
+  async function checkRoleAndFetch() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { router.push('/login'); return; }
+
+    const cachedRole = localStorage.getItem(`role_${session.user.id}`);
+    if (cachedRole) {
+      setIsAdmin(cachedRole === 'admin');
+      setMounted(true);
+      fetchItems();
+      return;
+    }
+
+    const { data: userData } = await supabase
+      .from('users').select('role').eq('id', session.user.id).single();
+    const role = userData?.role || 'salesman';
+    localStorage.setItem(`role_${session.user.id}`, role);
+    setIsAdmin(role === 'admin');
     setMounted(true);
     fetchItems();
-    return;
   }
-
-  // لو ما في بالـ cache جيبه من DB
-  const { data: userData } = await supabase
-    .from('users').select('role').eq('id', session.user.id).single();
-  const role = userData?.role || 'salesman';
-  localStorage.setItem(`role_${session.user.id}`, role);
-  setIsAdmin(role === 'admin');
-  setMounted(true);
-  fetchItems();
-}
 
   async function fetchItems() {
     const { data } = await supabase.from('inventory')
