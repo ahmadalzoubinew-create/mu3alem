@@ -95,8 +95,6 @@ export default function Customers() {
   const filtered = search.trim()
     ? customers.filter(c => c.name.includes(search) || (c.phone && c.phone.includes(search)))
     : customers;
-    ? customers.filter(c => c.name.includes(search) || (c.phone && c.phone.includes(search)))
-    : customers;
 
   return (
     <div style={{ minHeight: '100vh', background: '#080808', color: 'white', fontFamily: 'system-ui', paddingBottom: '60px' }}>
