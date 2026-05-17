@@ -18,8 +18,16 @@ export default function Customers() {
   useEffect(() => { fetchCustomers(); }, []);
 
   async function fetchCustomers() {
-    const { data } = await supabase.from('customers').select('*').order('name');
-    if (data) setCustomers(data);
+    const { data } = await supabase
+      .from('customers')
+      .select('*, transactions(count)')
+      .eq('transactions.status', 'completed');
+    if (data) {
+      const sorted = data
+        .map(c => ({ ...c, txnCount: c.transactions?.[0]?.count || 0 }))
+        .sort((a, b) => b.txnCount - a.txnCount);
+      setCustomers(sorted);
+    }
   }
 
   async function openCustomer(c) {
@@ -132,7 +140,24 @@ export default function Customers() {
                 <div>ما في زبائن</div>
               </div>
             )}
-            {filtered.map(c => (
+
+            {/* أكثر 20 زبون نشاطاً */}
+            {!search.trim() && filtered.slice(0, 20).filter(c => c.txnCount > 0).length > 0 && (
+              <div style={{ fontSize: '10px', color: '#e8971e', letterSpacing: '2px',
+                textTransform: 'uppercase', textAlign: 'right', marginBottom: '4px' }}>
+                ⭐ الأكثر نشاطاً
+              </div>
+            )}
+
+            {filtered.map((c, i) => (
+              <>
+                {/* فاصل بعد أول 20 */}
+                {!search.trim() && i === 20 && (
+                  <div key="divider" style={{ fontSize: '10px', color: '#333', letterSpacing: '2px',
+                    textTransform: 'uppercase', textAlign: 'right', marginTop: '8px', marginBottom: '4px' }}>
+                    بقية الزبائن
+                  </div>
+                )}
               <button key={c.id} onClick={() => openCustomer(c)}
                 style={{ width: '100%', padding: '14px 16px', borderRadius: '16px', border: '1px solid #1a1a1a', background: '#0f0f0f', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.15s' }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = '#CE1126'}
@@ -149,6 +174,7 @@ export default function Customers() {
                   {c.notes && <div style={{ color: '#555', fontSize: '10px', marginTop: '2px' }}>📝 {c.notes.slice(0, 30)}{c.notes.length > 30 ? '...' : ''}</div>}
                 </div>
               </button>
+              </>
             ))}
           </div>
         </div>

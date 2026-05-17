@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { getRandom } from '../lib/messages';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { parseDecimal } from '../lib/formatNumber';
@@ -33,12 +34,17 @@ function NewSaleContent() {
 
   async function fetchData() {
     const [{ data: custs }, { data: inv }, { data: txns }] = await Promise.all([
-      supabase.from('customers').select('*').order('name'),
+      supabase.from('customers').select('*, transactions(count)').eq('transactions.status', 'completed'),
       supabase.from('inventory').select('*').eq('is_active', true).order('name'),
       supabase.from('transactions').select('customer_id, total_amount').eq('status', 'completed'),
     ]);
 
-    if (custs) setCustomers(custs);
+    if (custs) {
+      const sorted = custs
+        .map(c => ({ ...c, txnCount: c.transactions?.[0]?.count || 0 }))
+        .sort((a, b) => b.txnCount - a.txnCount);
+      setCustomers(sorted);
+    }
     if (inv) setInventory(inv);
 
     const customerId = searchParams.get('customer');
@@ -56,10 +62,8 @@ function NewSaleContent() {
       });
       const custMap = {};
       custs.forEach(c => custMap[c.id] = c);
-      const byCount = Object.entries(countMap).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => custMap[id]).filter(Boolean);
-      const byValue = Object.entries(valueMap).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => custMap[id]).filter(Boolean);
+      const byCount = Object.entries(countMap).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([id]) => custMap[id]).filter(Boolean);
       setTopByCount(byCount);
-      setTopByValue(byValue);
     }
   }
 
@@ -122,7 +126,6 @@ function NewSaleContent() {
     e.preventDefault();
     if (!selectedCustomer || saleItems.length === 0) return;
 
-    // ── Validation: cash can't exceed total ──
     const cashVal = parseDecimal(cashReceived) || 0;
     if (cashVal > total) {
       setMsg('الكاش المدخل أكثر من قيمة الفاتورة!');
@@ -142,7 +145,6 @@ function NewSaleContent() {
           inventory_id: item.inventoryId,
           quantity: qty, unit: item.unit,
           unit_price: price, total_amount: qty * price,
-          // الكاش بيتحط بأول منتج بس — الباقي صفر
           cash_received: isFirstItem ? cashVal : 0,
           status: 'completed',
         });
@@ -155,7 +157,8 @@ function NewSaleContent() {
           last_used_at: new Date().toISOString(), use_count: 1,
         }, { onConflict: 'customer_id,inventory_id,quantity,unit' });
       }
-      setMsg('هيك الشغل ولا بلاش! 💸');
+      const m = getRandom('NEW_SALE');
+      setMsg(`${m.text} ${m.emoji}`);
       setTimeout(() => window.location.href = '/dashboard', 1500);
     } catch (err) {
       console.error('Sale error:', err);
@@ -224,22 +227,9 @@ function NewSaleContent() {
             />
             {showTop && topByCount.length > 0 && (
               <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '10px', color: '#007A3D', letterSpacing: '1px', textAlign: 'right', marginBottom: '8px' }}>الاكثر تعاملا</p>
+                <p style={{ fontSize: '10px', color: '#e8971e', letterSpacing: '1px', textAlign: 'right', marginBottom: '8px' }}>⭐ الأكثر نشاطاً</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end' }}>
                   {topByCount.map(c => (
-                    <button key={c.id} type="button" onClick={() => onCustomerSelect(c)}
-                      style={{ padding: '8px 14px', borderRadius: '20px', border: '1.5px solid rgba(0,122,61,0.4)', background: 'rgba(0,122,61,0.08)', color: '#007A3D', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
-                      {c.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {showTop && topByValue.length > 0 && (
-              <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '10px', color: '#e8971e', letterSpacing: '1px', textAlign: 'right', marginBottom: '8px' }}>الاعلى قيمة</p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end' }}>
-                  {topByValue.map(c => (
                     <button key={c.id} type="button" onClick={() => onCustomerSelect(c)}
                       style={{ padding: '8px 14px', borderRadius: '20px', border: '1.5px solid rgba(232,151,30,0.4)', background: 'rgba(232,151,30,0.08)', color: '#e8971e', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
                       {c.name}
