@@ -38,15 +38,22 @@ export default function Setup() {
     localStorage.setItem(`display_name_${session.user.id}`, displayName.trim());
 
     // واحفظه بقاعدة البيانات كمان
-    await supabase
-      .from('users')
-      .upsert({
-        id: session.user.id,
-        email: session.user.email,
-        full_name: displayName.trim(),
-        display_name: displayName.trim(),
-        role: 'salesman'
-      });
+    // شوف اذا اليوزر موجود
+const { data: existingUser } = await supabase
+  .from('users')
+  .select('role')
+  .eq('id', session.user.id)
+  .single();
+
+await supabase
+  .from('users')
+  .upsert({
+    id: session.user.id,
+    email: session.user.email,
+    full_name: displayName.trim(),
+    display_name: displayName.trim(),
+    role: existingUser?.role || 'salesman'
+  });
 
     router.push('/dashboard');
   }
