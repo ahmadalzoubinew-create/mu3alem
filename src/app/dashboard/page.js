@@ -363,9 +363,9 @@ export default function Dashboard() {
         <NavTab icon="🏠" label="الرئيسية"
           active={activeTab === 'home'} onClick={() => setActiveTab('home')} />
         <NavTab icon="👥" label="الزبائن"
-          active={activeTab === 'customers'} onClick={() => router.push('/customers')} />
+          active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} />
         <NavTab icon="📦" label="مخزوني"
-          active={activeTab === 'stock'} onClick={() => router.push('/inventory')} />
+          active={activeTab === 'stock'} onClick={() => setActiveTab('stock')} />
       </div>
 
       {/* ── ADD CUSTOMER MODAL ── */}
@@ -400,7 +400,7 @@ export default function Dashboard() {
                 style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {[
                   { ph: 'اسم الزبون', val: custName, fn: setCustName, req: true },
-                  { ph: 'رقم الهاتف (اختياري)', val: custPhone, fn: setCustPhone, req: false },
+                  { ph: 'رقم الهاتف *', val: custPhone, fn: setCustPhone, req: true },
                 ].map((f, i) => (
                   <input key={i} type="text" placeholder={f.ph} value={f.val}
                     required={f.req} onChange={e => f.fn(e.target.value)}
