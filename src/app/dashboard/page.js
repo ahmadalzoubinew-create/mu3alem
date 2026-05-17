@@ -365,7 +365,7 @@ export default function Dashboard() {
         <NavTab icon="👥" label="الزبائن"
           active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} />
         <NavTab icon="📦" label="مخزوني"
-          active={activeTab === 'stock'} onClick={() => setActiveTab('stock')} />
+          active={activeTab === 'stock'} onClick={() => router.push('/inventory')} />
       </div>
 
       {/* ── ADD CUSTOMER MODAL ── */}
