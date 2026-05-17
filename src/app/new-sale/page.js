@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { getRandom } from '../lib/messages';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { parseDecimal } from '../lib/formatNumber';
@@ -144,7 +145,8 @@ function NewSaleContent() {
           last_used_at: new Date().toISOString(), use_count: 1,
         }, { onConflict: 'customer_id,inventory_id,quantity,unit' });
       }
-      setMsg('هيك الشغل ولا بلاش! 💸');
+      const m = getRandom('NEW_SALE');
+      setMsg(`${m.text} ${m.emoji}`);
       setTimeout(() => window.location.href = '/dashboard', 1500);
     } catch (err) {
       console.error('Sale error:', err);

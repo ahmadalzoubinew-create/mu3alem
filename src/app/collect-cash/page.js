@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { getRandom } from '../lib/messages';
 import { useRouter } from 'next/navigation';
 
 export default function CollectCash() {
@@ -65,7 +66,8 @@ export default function CollectCash() {
       .update({ total_debt: newDebt })
       .eq('id', selectedCustomer.id);
 
-    setMsg('الكاش وصل يا معلم 💵');
+      const m = getRandom('CASH_COLLECTION');
+      setMsg(`${m.text} ${m.emoji}`);
     setAmount('');
     setSelectedCustomer(null);
     fetchCustomers();

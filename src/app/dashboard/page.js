@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { getRandom } from '../lib/messages';
 import { useRouter } from 'next/navigation';
 import { useAutoLogout } from '../lib/useAutoLogout';
 
@@ -122,7 +123,8 @@ export default function Dashboard() {
       .insert({ name: custName, phone: custPhone, notes: custNotes, created_by: user.id });
     if (error) { setCustMsg('صار خطأ'); }
     else {
-      setCustMsg('كبرت الشبكة يا معلم 🤝');
+      const m = getRandom('NEW_CUSTOMER');
+      setCustMsg(`${m.text} ${m.emoji}`);
       setCustName(''); setCustPhone(''); setCustNotes('');
       fetchAll();
       setTimeout(() => { setShowAddCustomer(false); setCustMsg(''); }, 1400);
