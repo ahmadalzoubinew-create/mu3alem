@@ -254,9 +254,23 @@ export default function Dashboard() {
   // ── CUSTOMERS TAB ─────────────────────────────────────────
   const CustomersTab = () => {
     const [search, setSearch] = useState('');
+    const [custCounts, setCustCounts] = useState({});
+
+    useEffect(() => {
+      supabase.from('transactions').select('customer_id').eq('status', 'completed')
+        .then(({ data }) => {
+          const map = {};
+          data?.forEach(t => { map[t.customer_id] = (map[t.customer_id] || 0) + 1; });
+          setCustCounts(map);
+        });
+    }, []);
+
+    const sorted = [...customers].sort((a, b) => (custCounts[b.id] || 0) - (custCounts[a.id] || 0));
+    const top20 = sorted.filter(c => custCounts[c.id] > 0).slice(0, 20);
     const filtered = search.trim()
-      ? customers.filter(c => c.name.includes(search) || (c.phone && c.phone.includes(search)))
-      : customers;
+      ? sorted.filter(c => c.name.includes(search) || (c.phone && c.phone.includes(search)))
+      : sorted;
+
     return (
       <div style={{ padding: '16px' }}>
         <input type="text" placeholder="ابحث..." value={search}
@@ -267,6 +281,26 @@ export default function Dashboard() {
           onFocus={e => e.target.style.borderColor = '#CE1126'}
           onBlur={e => e.target.style.borderColor = '#333'}
         />
+
+        {/* أكثر 20 زبون نشاطاً */}
+        {!search.trim() && top20.length > 0 && (
+          <div style={{ marginBottom: '12px' }}>
+            <p style={{ fontSize: '10px', color: '#e8971e', letterSpacing: '1px',
+              textAlign: 'right', marginBottom: '8px' }}>⭐ الأكثر نشاطاً</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end' }}>
+              {top20.map(c => (
+                <button key={`top-${c.id}`} onClick={() => router.push(`/customers?id=${c.id}`)}
+                  style={{ padding: '7px 13px', borderRadius: '20px',
+                    border: '1.5px solid rgba(232,151,30,0.4)',
+                    background: 'rgba(232,151,30,0.08)',
+                    color: '#e8971e', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}>
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {filtered.map(c => (
             <button key={c.id}
