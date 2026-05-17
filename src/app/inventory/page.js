@@ -13,6 +13,7 @@ export default function Inventory() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -27,6 +28,7 @@ export default function Inventory() {
       .from('users').select('role').eq('id', session.user.id).single();
 
     setIsAdmin(userData?.role === 'admin');
+    setMounted(true);
     fetchItems();
   }
 
@@ -72,6 +74,8 @@ export default function Inventory() {
 
   const unitLabel = { pcs: 'قطعة', g: 'غرام', ctn: 'كرتون' };
 
+  if (!mounted) return null;
+
   return (
     <div style={{ minHeight: '100vh', background: '#080808', color: 'white',
       fontFamily: 'system-ui', paddingBottom: '60px' }}>
@@ -94,7 +98,6 @@ export default function Inventory() {
         </div>
       </div>
 
-      {/* زر إضافة — للأدمن بس */}
       {isAdmin && (
         <div style={{ padding: '16px 20px 0', display: 'flex', justifyContent: 'flex-end' }}>
           <button onClick={() => { setShowAdd(true); setEditItem(null);
@@ -107,7 +110,6 @@ export default function Inventory() {
         </div>
       )}
 
-      {/* قائمة المخزون */}
       <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {items.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: '#333' }}>
@@ -120,7 +122,6 @@ export default function Inventory() {
             borderRadius: '16px', padding: '14px 16px',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', gap: '8px' }}>
-              {/* أزرار التعديل والحذف — للأدمن بس */}
               {isAdmin && (
                 <>
                   <button onClick={() => openEdit(item)}
@@ -156,7 +157,6 @@ export default function Inventory() {
         'linear-gradient(90deg, #CE1126 25%, #007A3D 25%, #007A3D 50%, #fff 50%, #fff 75%, #000 75%)',
         position: 'fixed', bottom: 0, width: '100%' }} />
 
-      {/* Modal — للأدمن بس */}
       {isAdmin && (showAdd || editItem) && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -186,7 +186,7 @@ export default function Inventory() {
               </div>
             </div>
 
-            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ padding: '20px' }}>
               <form onSubmit={handleSave}
                 style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <input type="text" placeholder="اسم السلعة" value={name}
@@ -230,8 +230,7 @@ export default function Inventory() {
                 <button type="submit" disabled={loading}
                   style={{ width: '100%', padding: '16px', borderRadius: '16px',
                     border: 'none',
-                    background: loading ? '#1a1a1a'
-                      : 'linear-gradient(135deg, #e8971e, #c97d10)',
+                    background: loading ? '#1a1a1a' : 'linear-gradient(135deg, #e8971e, #c97d10)',
                     color: loading ? '#333' : 'black', fontWeight: 900,
                     fontSize: '14px', cursor: loading ? 'not-allowed' : 'pointer' }}>
                   {loading ? '...' : editItem ? 'حفظ التعديل ←' : 'اضافة السلعة ←'}
