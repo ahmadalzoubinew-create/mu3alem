@@ -304,6 +304,8 @@ export default function Customers() {
               </div>
             </div>
           </div>
+          {/* زر بيع جديد */}
+          <button onClick={() => router.push(`/new-sale?customer=${selected.id}`)}
             style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1.5px solid #CE1126', background: 'rgba(206,17,38,0.08)', color: '#CE1126', fontWeight: 700, fontSize: '14px', cursor: 'pointer', marginBottom: '10px' }}>
             بيع جديد لهاد الزبون ←
           </button>
