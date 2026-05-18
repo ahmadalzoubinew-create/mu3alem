@@ -224,29 +224,42 @@ export default function Dashboard() {
             <div style={{ fontSize: '28px', marginBottom: '6px' }}>📭</div>
             <div style={{ fontSize: '13px' }}>ابدأ ببيع جديد</div>
           </div>
-        ) : recentTxns.map(t => (
-          <div key={t.id} style={{ background: '#0f0f0f', border: '1px solid #1a1a1a',
+        ) : (() => {
+          // تجميع الـ rows بنفس invoice_id بكارت واحد
+          const invoiceMap = {};
+          recentTxns.forEach(t => {
+            const key = t.invoice_id || t.id;
+            if (!invoiceMap[key]) {
+              invoiceMap[key] = { ...t, items: [], totalAmt: 0, totalCash: 0, totalDebt: 0 };
+            }
+            invoiceMap[key].items.push(t.inventory?.name);
+            invoiceMap[key].totalAmt  += parseFloat(t.total_amount  || 0);
+            invoiceMap[key].totalCash += parseFloat(t.cash_received  || 0);
+            invoiceMap[key].totalDebt += parseFloat(t.credit_amount  || 0);
+          });
+          return Object.values(invoiceMap).map(inv => (
+          <div key={inv.invoice_id || inv.id} style={{ background: '#0f0f0f', border: '1px solid #1a1a1a',
             borderRadius: '14px', padding: '11px 14px', marginBottom: '7px',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: '14px', fontWeight: 700, color: '#CE1126' }}>
-                {f(t.total_amount)}
+                {f(inv.totalAmt)}
               </div>
-              {parseFloat(t.credit_amount) > 0 && (
-                <div style={{ fontSize: '11px', color: '#e8971e' }}>
-                  دين: {f(t.credit_amount)}
-                </div>
-              )}
+              {inv.totalCash > 0 && <div style={{ fontSize: '11px', color: '#007A3D' }}>كاش: {f(inv.totalCash)}</div>}
+              {inv.totalDebt > 0 && <div style={{ fontSize: '11px', color: '#e8971e' }}>دين: {f(inv.totalDebt)}</div>}
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '13px', fontWeight: 700 }}>{t.customers?.name}</div>
+              <div style={{ fontSize: '13px', fontWeight: 700 }}>{inv.customers?.name}</div>
+              <div style={{ fontSize: '10px', color: '#555' }}>
+                {inv.items.filter(Boolean).join(' · ')}
+              </div>
               <div style={{ fontSize: '10px', color: '#444' }}>
-                {t.inventory?.name} · {new Date(t.created_at)
-                  .toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}
+                {new Date(inv.created_at).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
           </div>
-        ))}
+        ));
+        })()}
       </div>
     </div>
   );
