@@ -415,7 +415,7 @@ export default function Dashboard() {
         <NavTab icon="🏠" label="الرئيسية"
           active={activeTab === 'home'} onClick={() => setActiveTab('home')} />
         <NavTab icon="👥" label="الزبائن"
-          active={activeTab === 'customers'} onClick={() => setActiveTab('customers')} />
+          active={activeTab === 'customers'} onClick={() => router.push('/customers')} />
         <NavTab icon="📦" label="مخزوني"
           active={activeTab === 'stock'} onClick={() => router.push('/inventory')} />
       </div>
