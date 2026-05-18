@@ -67,6 +67,15 @@ export default function Customers() {
     fetchCustomers();
   }
 
+  function openWhatsAppDirect(phone) {
+    if (!phone) return;
+    let p = phone.replace(/[\s\-\(\)]/g, '');
+    if (p.startsWith('+')) p = p.slice(1);
+    else if (p.startsWith('00')) p = p.slice(2);
+    else if (p.startsWith('0')) p = '49' + p.slice(1);
+    window.open(`https://wa.me/${p}`, '_blank');
+  }
+
   async function sendWhatsAppStatement() {
     if (!selected?.phone) {
       alert('هاد الزبون ما عنده رقم هاتف!');
@@ -176,22 +185,32 @@ export default function Customers() {
                     بقية الزبائن
                   </div>
                 )}
-              <button key={c.id} onClick={() => openCustomer(c)}
-                style={{ width: '100%', padding: '14px 16px', borderRadius: '16px', border: '1px solid #1a1a1a', background: '#0f0f0f', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.borderColor = '#CE1126'}
-                onMouseLeave={e => e.currentTarget.style.borderColor = '#1a1a1a'}>
-                <div style={{ textAlign: 'left' }}>
-                  {parseFloat(c.total_debt) > 0
-                    ? <span style={{ color: '#CE1126', fontWeight: 700, fontSize: '14px' }}>€{parseFloat(c.total_debt).toFixed(2)}</span>
-                    : <span style={{ color: '#007A3D', fontSize: '12px' }}>نظيف ✓</span>
-                  }
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 700, fontSize: '14px' }}>{c.name}</div>
-                  {c.phone && <div style={{ color: '#444', fontSize: '11px' }}>{c.phone}</div>}
-                  {c.notes && <div style={{ color: '#555', fontSize: '10px', marginTop: '2px' }}>📝 {c.notes.slice(0, 30)}{c.notes.length > 30 ? '...' : ''}</div>}
-                </div>
-              </button>
+              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button onClick={() => openCustomer(c)}
+                  style={{ flex: 1, padding: '14px 16px', borderRadius: '16px', border: '1px solid #1a1a1a', background: '#0f0f0f', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = '#CE1126'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = '#1a1a1a'}>
+                  <div style={{ textAlign: 'left' }}>
+                    {parseFloat(c.total_debt) > 0
+                      ? <span style={{ color: '#CE1126', fontWeight: 700, fontSize: '14px' }}>€{parseFloat(c.total_debt).toFixed(2)}</span>
+                      : <span style={{ color: '#007A3D', fontSize: '12px' }}>نظيف ✓</span>
+                    }
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 700, fontSize: '14px' }}>{c.name}</div>
+                    {c.phone && <div style={{ color: '#444', fontSize: '11px' }}>{c.phone}</div>}
+                    {c.notes && <div style={{ color: '#555', fontSize: '10px', marginTop: '2px' }}>📝 {c.notes.slice(0, 30)}{c.notes.length > 30 ? '...' : ''}</div>}
+                  </div>
+                </button>
+                {c.phone && (
+                  <button onClick={() => openWhatsAppDirect(c.phone)}
+                    style={{ padding: '12px 10px', borderRadius: '12px', border: '1px solid rgba(37,211,102,0.3)',
+                      background: 'rgba(37,211,102,0.07)', cursor: 'pointer', fontSize: '18px',
+                      lineHeight: 1, flexShrink: 0 }}>
+                    💬
+                  </button>
+                )}
+              </div>
               </>
             ))}
           </div>
@@ -243,10 +262,18 @@ export default function Customers() {
             بيع جديد لهاد الزبون ←
           </button>
 
-          {/* زر كشف الحساب واتساب */}
+          {/* واتساب — رسالة مباشرة (للكل) */}
+          {selected.phone && (
+            <button onClick={() => openWhatsAppDirect(selected.phone)}
+              style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1.5px solid rgba(37,211,102,0.5)', background: 'rgba(37,211,102,0.07)', color: '#25D366', fontWeight: 700, fontSize: '13px', cursor: 'pointer', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '16px' }}>💬</span> Direktnachricht senden
+            </button>
+          )}
+
+          {/* واتساب — كشف الحساب (للي عندهم دين فقط) */}
           {parseFloat(selected.total_debt) > 0 && (
             <button onClick={sendWhatsAppStatement}
-              style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1.5px solid #25D366', background: 'rgba(37,211,102,0.07)', color: '#25D366', fontWeight: 700, fontSize: '13px', cursor: 'pointer', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1.5px solid rgba(37,211,102,0.3)', background: 'rgba(37,211,102,0.04)', color: '#1aa34a', fontWeight: 700, fontSize: '13px', cursor: 'pointer', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
               <span style={{ fontSize: '16px' }}>📲</span> Kontoauszug per WhatsApp senden
             </button>
           )}
