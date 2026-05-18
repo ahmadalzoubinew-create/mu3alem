@@ -256,8 +256,54 @@ export default function Customers() {
             </div>
           )}
 
-          {/* زر بيع جديد */}
-          <button onClick={() => router.push(`/new-sale?customer=${selected.id}`)}
+          {/* CRM Tags */}
+          <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* WhatsApp Status */}
+            <div>
+              <p style={{ fontSize: '10px', color: '#444', textAlign: 'right', marginBottom: '5px' }}>حالة WhatsApp</p>
+              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                {[['Active','نشط 🟢'],['No_Reply','ما رد 🟡'],['No_WhatsApp','بدون WA 🔴']].map(([v, l]) => {
+                  const isActive = (selected.whatsapp_status || 'Active') === v;
+                  return (
+                    <button key={v} onClick={async () => {
+                      await supabase.from('customers').update({ whatsapp_status: v }).eq('id', selected.id);
+                      setSelected({ ...selected, whatsapp_status: v });
+                      setCustomers(customers.map(c => c.id === selected.id ? { ...c, whatsapp_status: v } : c));
+                    }}
+                      style={{ padding: '6px 10px', borderRadius: '10px', border: 'none', fontSize: '11px', cursor: 'pointer',
+                        background: isActive ? '#222' : '#111',
+                        color: isActive ? 'white' : '#444',
+                        outline: isActive ? '1.5px solid #555' : 'none' }}>
+                      {l}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Interest Level */}
+            <div>
+              <p style={{ fontSize: '10px', color: '#444', textAlign: 'right', marginBottom: '5px' }}>مستوى الاهتمام</p>
+              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                {[['Interested','مهتم ✅'],['Not_Interested','غير مهتم ❌']].map(([v, l]) => {
+                  const isActive = (selected.interest_level || 'Interested') === v;
+                  return (
+                    <button key={v} onClick={async () => {
+                      await supabase.from('customers').update({ interest_level: v }).eq('id', selected.id);
+                      setSelected({ ...selected, interest_level: v });
+                      setCustomers(customers.map(c => c.id === selected.id ? { ...c, interest_level: v } : c));
+                    }}
+                      style={{ padding: '6px 10px', borderRadius: '10px', border: 'none', fontSize: '11px', cursor: 'pointer',
+                        background: isActive ? '#222' : '#111',
+                        color: isActive ? 'white' : '#444',
+                        outline: isActive ? '1.5px solid #555' : 'none' }}>
+                      {l}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
             style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1.5px solid #CE1126', background: 'rgba(206,17,38,0.08)', color: '#CE1126', fontWeight: 700, fontSize: '14px', cursor: 'pointer', marginBottom: '10px' }}>
             بيع جديد لهاد الزبون ←
           </button>

@@ -119,6 +119,15 @@ function ReportsContent() {
                 justifyContent: 'center', gap: '8px' }}>
               🔍 مطابقة الحسابات — Admin
             </button>
+            <button onClick={() => router.push('/marketing')}
+              style={{ width: '100%', padding: '14px', borderRadius: '16px',
+                border: '1.5px solid rgba(206,17,38,0.4)',
+                background: 'rgba(206,17,38,0.06)',
+                color: '#CE1126', fontWeight: 700, fontSize: '14px',
+                cursor: 'pointer', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', gap: '8px', marginTop: '8px' }}>
+              📣 حملات الواتساب — Admin
+            </button>
           </div>
 
           {/* Tabs */}
