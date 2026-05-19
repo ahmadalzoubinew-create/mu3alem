@@ -362,7 +362,6 @@ export default function Customers() {
                   <div style={{ color: '#444', fontSize: '11px' }}>{inv.users?.display_name || inv.users?.full_name}</div>
                 </div>
               </div>
-            ));
             ))}
           </div>
         </div>
