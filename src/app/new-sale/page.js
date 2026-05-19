@@ -148,6 +148,7 @@ function NewSaleContent() {
           quantity: qty, unit: item.unit,
           unit_price: price, total_amount: qty * price,
           cash_received: isFirstItem ? cashVal : 0,
+          credit_amount: isFirstItem ? Math.max(0, total - cashVal) : 0,
           status: 'completed',
         });
         isFirstItem = false;
