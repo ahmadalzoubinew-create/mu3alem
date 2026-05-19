@@ -81,17 +81,23 @@ export default function Dashboard() {
   useAutoLogout();
 
   const fetchAll = useCallback(async () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // KPIs — كل العمليات (بدون فلتر تاريخ عشان ما تضيع بالـ timezone)
+    const { data: txns } = await supabase
+      .from('invoices')
+      .select('total_amount,cash_received,credit_amount')
+      .eq('status', 'completed');
 
-    const [{ data: txns }, { data: recent }, { data: custs }, { data: inv }] = await Promise.all([
-      supabase.from('transactions').select('total_amount,cash_received,credit_amount')
-        .eq('status', 'completed').gte('created_at', today.toISOString()),
-      supabase.from('transactions').select('*, customers(name), inventory(name)')
-        .eq('status', 'completed').order('created_at', { ascending: false }).limit(8),
-      supabase.from('customers').select('*').order('name'),
-      supabase.from('inventory').select('*').eq('is_active', true).order('name'),
-    ]);
+    // آخر العمليات
+    const { data: recent } = await supabase
+      .from('invoices')
+      .select('*, customers(name), invoice_items(*, inventory(name))')
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(8);
+
+    // باقي البيانات
+    const { data: custs } = await supabase.from('customers').select('*').order('name');
+    const { data: inv }   = await supabase.from('inventory').select('*').eq('is_active', true).order('name');
 
     if (txns) setStats({
       today: txns.reduce((s, t) => s + parseFloat(t.total_amount || 0), 0),
@@ -150,17 +156,15 @@ export default function Dashboard() {
 
   const f = (n) => `€${parseFloat(n || 0).toFixed(2)}`;
 
-  function groupInvoices(txns) {
-    const map = {};
-    txns.forEach(t => {
-      const key = t.invoice_id || t.id;
-      if (!map[key]) map[key] = { ...t, key, items: [], totalAmt: 0, totalCash: 0, totalDebt: 0 };
-      map[key].items.push(t.inventory?.name);
-      map[key].totalAmt  += parseFloat(t.total_amount  || 0);
-      map[key].totalCash += parseFloat(t.cash_received || 0);
-      map[key].totalDebt += parseFloat(t.credit_amount || 0);
-    });
-    return Object.values(map);
+  function groupInvoices(list) {
+    return list.map(inv => ({
+      ...inv,
+      key: inv.id,
+      items: (inv.invoice_items || []).map(i => i.inventory?.name).filter(Boolean),
+      totalAmt:  parseFloat(inv.total_amount  || 0),
+      totalCash: parseFloat(inv.cash_received || 0),
+      totalDebt: parseFloat(inv.credit_amount || 0),
+    }));
   }
 
   // ── HOME TAB ─────────────────────────────────────────────

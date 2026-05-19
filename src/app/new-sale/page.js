@@ -167,11 +167,12 @@ function NewSaleContent() {
 
       if (itemsErr) throw itemsErr;
 
-      // ── 3. حدّث ذاكرة الأسعار ──────────────────────────────
+      // ── 3. حدّث ذاكرة الأسعار + خصم المخزون ───────────────
       for (const item of saleItems) {
         const qty = parseDecimal(item.quantity);
         const price = parseDecimal(item.price);
         if (!qty || !price) continue;
+
         await supabase.from('price_memory').upsert({
           customer_id: selectedCustomer.id,
           inventory_id: item.inventoryId,
@@ -179,6 +180,14 @@ function NewSaleContent() {
           unit_price: price, total_price: qty * price,
           last_used_at: new Date().toISOString(), use_count: 1,
         }, { onConflict: 'customer_id,inventory_id,quantity,unit' });
+
+        // خصم الكمية من المخزون
+        const { data: invItem } = await supabase
+          .from('inventory').select('stock_quantity').eq('id', item.inventoryId).single();
+        if (invItem) {
+          const newQty = Math.max(0, parseFloat(invItem.stock_quantity || 0) - qty);
+          await supabase.from('inventory').update({ stock_quantity: newQty }).eq('id', item.inventoryId);
+        }
       }
 
       // ── 4. حدّث دين الزبون ─────────────────────────────────
