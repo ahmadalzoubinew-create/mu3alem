@@ -39,8 +39,8 @@ export default function Customers() {
     setEditNotes(c.notes || '');
     setEditMode(false);
     const { data } = await supabase
-      .from('transactions')
-      .select('*, inventory(name), users(display_name, full_name)')
+      .from('invoices')
+      .select('*, invoice_items(*, inventory(name)), users(display_name, full_name)')
       .eq('customer_id', c.id)
       .eq('status', 'completed')
       .order('created_at', { ascending: false });
@@ -91,16 +91,15 @@ export default function Customers() {
     }
 
     const totalDebt = parseFloat(selected.total_debt || 0).toFixed(2);
-
-    // بناء الرسالة
     let msg = `Hallo ${selected.name}, hier ist Ihre aktuelle Kontoübersicht (Offene Beträge):\n\n`;
 
-    openTxns.forEach(t => {
-      const date = new Date(t.created_at).toLocaleDateString('de-DE');
-      const item = t.inventory?.name || '—';
-      const qty  = `${parseFloat(t.quantity)} ${t.unit || ''}`.trim();
-      const open = parseFloat(t.credit_amount).toFixed(2);
-      msg += `📅 ${date}\n📦 Artikel: ${item} (${qty})\n🔴 Offen: ${open} €\n\n`;
+    openTxns.forEach(inv => {
+      const date  = new Date(inv.created_at).toLocaleDateString('de-DE');
+      const items = (inv.invoice_items || [])
+        .map(i => `${i.inventory?.name} (${i.quantity} ${i.unit || ''})`.trim())
+        .join(', ') || '—';
+      const open  = parseFloat(inv.credit_amount).toFixed(2);
+      msg += `📅 ${date}\n📦 Artikel: ${items}\n🔴 Offen: ${open} €\n\n`;
     });
 
     msg += `💰 Gesamtsumme (Offen): ${totalDebt} €\n\nVielen Dank!`;
@@ -334,49 +333,37 @@ export default function Customers() {
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {(() => {
-              const invoiceMap = {};
-              txns.forEach(t => {
-                const key = t.invoice_id || t.id;
-                if (!invoiceMap[key]) {
-                  invoiceMap[key] = { ...t, items: [], totalAmt: 0, totalCash: 0, totalDebt: 0 };
-                }
-                invoiceMap[key].items.push({ name: t.inventory?.name, qty: t.quantity, unit: t.unit, price: t.total_amount });
-                invoiceMap[key].totalAmt  += parseFloat(t.total_amount  || 0);
-                invoiceMap[key].totalCash += parseFloat(t.cash_received  || 0);
-                invoiceMap[key].totalDebt += parseFloat(t.credit_amount  || 0);
-              });
-              return Object.values(invoiceMap).map(inv => (
+            {txns.map(inv => (
               <div key={inv.invoice_id || inv.id} style={{ background: '#0f0f0f', border: '1px solid #1a1a1a', borderRadius: '16px', padding: '12px 16px' }}>
                 {/* هيدر الفاتورة */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ color: '#CE1126', fontWeight: 900, fontSize: '15px' }}>€{inv.totalAmt.toFixed(2)}</span>
+                  <span style={{ color: '#CE1126', fontWeight: 900, fontSize: '15px' }}>€{parseFloat(inv.total_amount || 0).toFixed(2)}</span>
                   <span style={{ color: '#444', fontSize: '10px' }}>
                     {new Date(inv.created_at).toLocaleDateString('ar')} · {new Date(inv.created_at).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                {/* المنتجات */}
+                {/* البنود */}
                 <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: '6px', marginBottom: '6px' }}>
-                  {inv.items.map((item, i) => (
+                  {(inv.invoice_items || []).map((item, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#aaa', marginBottom: '2px' }}>
-                      <span style={{ color: '#555' }}>€{parseFloat(item.price).toFixed(2)}</span>
-                      <span>{item.name} · {item.qty} {item.unit}</span>
+                      <span style={{ color: '#555' }}>€{parseFloat(item.line_total || 0).toFixed(2)}</span>
+                      <span>{item.inventory?.name} · {item.quantity} {item.unit}</span>
                     </div>
                   ))}
                 </div>
                 {/* كاش / دين */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <span style={{ color: '#007A3D', fontSize: '11px' }}>كاش: €{inv.totalCash.toFixed(2)}</span>
-                    {inv.totalDebt > 0 && (
-                      <span style={{ color: '#e8971e', fontSize: '11px', marginRight: '8px' }}> · دين: €{inv.totalDebt.toFixed(2)}</span>
+                    <span style={{ color: '#007A3D', fontSize: '11px' }}>كاش: €{parseFloat(inv.cash_received || 0).toFixed(2)}</span>
+                    {parseFloat(inv.credit_amount) > 0 && (
+                      <span style={{ color: '#e8971e', fontSize: '11px', marginRight: '8px' }}> · دين: €{parseFloat(inv.credit_amount).toFixed(2)}</span>
                     )}
                   </div>
                   <div style={{ color: '#444', fontSize: '11px' }}>{inv.users?.display_name || inv.users?.full_name}</div>
                 </div>
               </div>
             ));
-            })()}
+            ))}
           </div>
         </div>
       )}
