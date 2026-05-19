@@ -17,6 +17,7 @@ function NewSaleContent() {
   const [showDebtDetails, setShowDebtDetails] = useState(false);
   const [saleItems, setSaleItems] = useState([]);
   const [cashReceived, setCashReceived] = useState('');
+  const [amountError, setAmountError] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
@@ -128,9 +129,10 @@ function NewSaleContent() {
 
     const cashVal = parseDecimal(cashReceived) || 0;
     if (cashVal > total) {
-      setMsg('الكاش المدخل أكثر من قيمة الفاتورة!');
+      setAmountError('Fehler: Der gezahlte Betrag darf nicht größer als die Gesamtsumme sein!');
       return;
     }
+    setAmountError('');
 
     setLoading(true);
     try {
@@ -368,13 +370,22 @@ function NewSaleContent() {
                     value={cashReceived}
                     onChange={e => {
                       const val = e.target.value.replace(/[,،]/g, '.');
-                      if (parseDecimal(val) > total) return;
                       setCashReceived(val);
+                      if (parseDecimal(val) > total) {
+                        setAmountError('Fehler: Der gezahlte Betrag darf nicht größer als die Gesamtsumme sein!');
+                      } else {
+                        setAmountError('');
+                      }
                     }}
-                    style={{ width: '100%', background: '#161616', border: '1.5px solid #222', borderRadius: '12px', padding: '12px 14px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box' }}
-                    onFocus={e => e.target.style.borderColor = '#007A3D'}
-                    onBlur={e => e.target.style.borderColor = '#222'}
+                    style={{ width: '100%', background: '#161616', border: `1.5px solid ${amountError ? '#CE1126' : '#222'}`, borderRadius: '12px', padding: '12px 14px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box' }}
+                    onFocus={e => e.target.style.borderColor = amountError ? '#CE1126' : '#007A3D'}
+                    onBlur={e => e.target.style.borderColor = amountError ? '#CE1126' : '#222'}
                   />
+                  {amountError && (
+                    <div style={{ background: 'rgba(206,17,38,0.08)', border: '1px solid rgba(206,17,38,0.3)', borderRadius: '10px', padding: '10px 14px', marginTop: '8px' }}>
+                      <p style={{ color: '#CE1126', fontWeight: 700, fontSize: '11px', margin: 0 }}>⛔ {amountError}</p>
+                    </div>
+                  )}
                   {cashReceived !== '' && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #1a1a1a' }}>
                       <span style={{ fontWeight: 900, fontSize: '18px', color: debt > 0 ? '#CE1126' : '#007A3D' }}>
@@ -394,8 +405,8 @@ function NewSaleContent() {
             )}
 
             {saleItems.length > 0 && (
-              <button type="submit" disabled={loading}
-                style={{ width: '100%', padding: '18px', borderRadius: '18px', border: 'none', background: loading ? '#1a1a1a' : 'linear-gradient(135deg, #CE1126, #a00d1e)', color: loading ? '#333' : 'white', fontWeight: 900, fontSize: '16px', cursor: loading ? 'not-allowed' : 'pointer' }}>
+              <button type="submit" disabled={loading || !!amountError}
+                style={{ width: '100%', padding: '18px', borderRadius: '18px', border: 'none', background: loading || amountError ? '#1a1a1a' : 'linear-gradient(135deg, #CE1126, #a00d1e)', color: loading || amountError ? '#333' : 'white', fontWeight: 900, fontSize: '16px', cursor: loading || amountError ? 'not-allowed' : 'pointer' }}>
                 {loading ? '...' : 'تسجيل البيع ←'}
               </button>
             )}
