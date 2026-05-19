@@ -150,6 +150,19 @@ export default function Dashboard() {
 
   const f = (n) => `€${parseFloat(n || 0).toFixed(2)}`;
 
+  function groupInvoices(txns) {
+    const map = {};
+    txns.forEach(t => {
+      const key = t.invoice_id || t.id;
+      if (!map[key]) map[key] = { ...t, key, items: [], totalAmt: 0, totalCash: 0, totalDebt: 0 };
+      map[key].items.push(t.inventory?.name);
+      map[key].totalAmt  += parseFloat(t.total_amount  || 0);
+      map[key].totalCash += parseFloat(t.cash_received || 0);
+      map[key].totalDebt += parseFloat(t.credit_amount || 0);
+    });
+    return Object.values(map);
+  }
+
   // ── HOME TAB ─────────────────────────────────────────────
   const HomeTab = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px',
@@ -157,8 +170,6 @@ export default function Dashboard() {
 
       {/* KPI Row */}
       <div style={{ display: 'flex', gap: '10px' }}>
-        <KpiCard label="اليوم" value={f(stats.today)}
-          color="#CE1126" bg="rgba(206,17,38,0.08)" border="rgba(206,17,38,0.2)" />
         <KpiCard label="كاش" value={f(stats.cash)}
           color="#007A3D" bg="rgba(0,122,61,0.08)" border="rgba(0,122,61,0.2)"
           onClick={() => router.push('/reports?filter=cash')} />
@@ -224,42 +235,24 @@ export default function Dashboard() {
             <div style={{ fontSize: '28px', marginBottom: '6px' }}>📭</div>
             <div style={{ fontSize: '13px' }}>ابدأ ببيع جديد</div>
           </div>
-        ) : (() => {
-          // تجميع الـ rows بنفس invoice_id بكارت واحد
-          const invoiceMap = {};
-          recentTxns.forEach(t => {
-            const key = t.invoice_id || t.id;
-            if (!invoiceMap[key]) {
-              invoiceMap[key] = { ...t, items: [], totalAmt: 0, totalCash: 0, totalDebt: 0 };
-            }
-            invoiceMap[key].items.push(t.inventory?.name);
-            invoiceMap[key].totalAmt  += parseFloat(t.total_amount  || 0);
-            invoiceMap[key].totalCash += parseFloat(t.cash_received  || 0);
-            invoiceMap[key].totalDebt += parseFloat(t.credit_amount  || 0);
-          });
-          return Object.values(invoiceMap).map(inv => (
-          <div key={inv.invoice_id || inv.id} style={{ background: '#0f0f0f', border: '1px solid #1a1a1a',
+        ) : groupInvoices(recentTxns).map(inv => (
+          <div key={inv.key} style={{ background: '#0f0f0f', border: '1px solid #1a1a1a',
             borderRadius: '14px', padding: '11px 14px', marginBottom: '7px',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: '#CE1126' }}>
-                {f(inv.totalAmt)}
-              </div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#CE1126' }}>{f(inv.totalAmt)}</div>
               {inv.totalCash > 0 && <div style={{ fontSize: '11px', color: '#007A3D' }}>كاش: {f(inv.totalCash)}</div>}
               {inv.totalDebt > 0 && <div style={{ fontSize: '11px', color: '#e8971e' }}>دين: {f(inv.totalDebt)}</div>}
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: '13px', fontWeight: 700 }}>{inv.customers?.name}</div>
-              <div style={{ fontSize: '10px', color: '#555' }}>
-                {inv.items.filter(Boolean).join(' · ')}
-              </div>
+              <div style={{ fontSize: '10px', color: '#555' }}>{inv.items.filter(Boolean).join(' · ')}</div>
               <div style={{ fontSize: '10px', color: '#444' }}>
                 {new Date(inv.created_at).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
           </div>
-        ));
-        })()}
+        ))}
       </div>
     </div>
   );
