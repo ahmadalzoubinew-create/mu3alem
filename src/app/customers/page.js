@@ -1,118 +1,228 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { useRouter } from 'next/navigation';
+import { getRandom } from '../lib/messages';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
+import { parseDecimal } from '../lib/formatNumber';
 
-export default function Customers() {
+function NewSaleContent() {
   const [customers, setCustomers] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [txns, setTxns] = useState([]);
+  const [topByCount, setTopByCount] = useState([]);
+  const [topByValue, setTopByValue] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerDebt, setCustomerDebt] = useState(null);
+  const [customerLastSales, setCustomerLastSales] = useState([]);
+  const [showDebtDetails, setShowDebtDetails] = useState(false);
+  const [saleItems, setSaleItems] = useState([]);
+  const [cashReceived, setCashReceived] = useState('');
+  const [amountError, setAmountError] = useState('');
   const [search, setSearch] = useState('');
-  const [editMode, setEditMode] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editPhone, setEditPhone] = useState('');
-  const [editNotes, setEditNotes] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [user, setUser] = useState(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  useEffect(() => { fetchCustomers(); }, []);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) router.push('/login');
+      else setUser(session.user);
+    });
+    fetchData();
+  }, [router]);
 
-  async function fetchCustomers() {
-    const [{ data: custs }, { data: txns }] = await Promise.all([
+  async function fetchData() {
+    const [{ data: custs }, { data: inv }, { data: invData }] = await Promise.all([
       supabase.from('customers').select('*'),
-      supabase.from('transactions').select('customer_id').eq('status', 'completed'),
+      supabase.from('inventory').select('*').eq('is_active', true).order('name'),
+      supabase.from('invoices').select('customer_id').eq('status', 'completed'),
     ]);
-    if (custs) {
+
+    if (inv) setInventory(inv);
+
+    if (custs && invData) {
       const countMap = {};
-      txns?.forEach(t => { countMap[t.customer_id] = (countMap[t.customer_id] || 0) + 1; });
+      invData.forEach(t => { countMap[t.customer_id] = (countMap[t.customer_id] || 0) + 1; });
       const sorted = custs
         .map(c => ({ ...c, txnCount: countMap[c.id] || 0 }))
         .sort((a, b) => b.txnCount - a.txnCount);
       setCustomers(sorted);
+      const byCount = sorted.filter(c => c.txnCount > 0).slice(0, 20);
+      setTopByCount(byCount);
+    } else if (custs) {
+      setCustomers(custs);
+    }
+
+    const customerId = searchParams.get('customer');
+    if (customerId && custs) {
+      const preSelected = custs.find(c => c.id === customerId);
+      if (preSelected) onCustomerSelect(preSelected);
     }
   }
 
-  async function openCustomer(c) {
-    setSelected(c);
-    setEditName(c.name);
-    setEditPhone(c.phone || '');
-    setEditNotes(c.notes || '');
-    setEditMode(false);
-    const { data } = await supabase
-      .from('invoices')
-      .select('*, invoice_items(*, inventory(name)), users(display_name, full_name)')
-      .eq('customer_id', c.id)
-      .eq('status', 'completed')
-      .order('created_at', { ascending: false });
-    if (data) setTxns(data);
+  async function onCustomerSelect(customer) {
+    setSelectedCustomer(customer);
+    setSaleItems([]);
+    setMsg('');
+    setCashReceived('');
+    setShowDebtDetails(false);
+
+    const [{ data: memories }, { data: lastSales }] = await Promise.all([
+      supabase.from('price_memory').select('*, inventory(*)').eq('customer_id', customer.id).order('last_used_at', { ascending: false }),
+      supabase.from('transactions').select('*, inventory(name)').eq('customer_id', customer.id).eq('status', 'completed').order('created_at', { ascending: false }).limit(5),
+    ]);
+
+    setCustomerDebt(parseDecimal(customer.total_debt) || 0);
+    setCustomerLastSales(lastSales || []);
+
+    if (memories && memories.length > 0) {
+      setSaleItems(memories.map(m => ({
+        inventoryId: m.inventory_id,
+        name: m.inventory.name,
+        unit: m.unit,
+        quantity: m.quantity.toString(),
+        price: m.unit_price.toString(),
+      })));
+    }
   }
 
-  async function saveEdit() {
-    setSaving(true);
-    await supabase.from('customers')
-      .update({ name: editName, phone: editPhone, notes: editNotes })
-      .eq('id', selected.id);
-    const updated = { ...selected, name: editName, phone: editPhone, notes: editNotes };
-    setSelected(updated);
-    setEditMode(false);
-    setSaving(false);
-    fetchCustomers();
+  function toggleInventoryItem(item) {
+    const exists = saleItems.find(i => i.inventoryId === item.id);
+    if (exists) {
+      setSaleItems(saleItems.filter(i => i.inventoryId !== item.id));
+    } else {
+      setSaleItems([...saleItems, {
+        inventoryId: item.id, name: item.name,
+        unit: item.default_unit, quantity: '', price: '',
+        maxQty: parseDecimal(item.stock_quantity),
+      }]);
+    }
   }
 
-  async function deleteCustomer() {
-    if (!confirm('Are you sure you want to delete this customer?')) return;
-    await supabase.from('customers').delete().eq('id', selected.id);
-    setSelected(null);
-    setTxns([]);
-    fetchCustomers();
+  function updateField(inventoryId, field, value) {
+    const normalized = value.replace(/[,،]/g, '.');
+    if (field === 'quantity') {
+      const item = inventory.find(i => i.id === inventoryId);
+      const maxQty = item ? parseDecimal(item.stock_quantity) : 999999;
+      if (parseDecimal(normalized) > maxQty) return;
+    }
+    setSaleItems(saleItems.map(i =>
+      i.inventoryId === inventoryId ? { ...i, [field]: normalized } : i
+    ));
   }
 
-  function openWhatsAppDirect(phone) {
-    if (!phone) return;
-    let p = phone.replace(/[\s\-\(\)]/g, '');
-    if (p.startsWith('+')) p = p.slice(1);
-    else if (p.startsWith('00')) p = p.slice(2);
-    else if (p.startsWith('0')) p = '49' + p.slice(1);
-    window.open(`https://wa.me/${p}`, '_blank');
-  }
+  const total = saleItems.reduce((sum, i) =>
+    sum + ((parseDecimal(i.quantity) || 0) * (parseDecimal(i.price) || 0)), 0);
+  const debt = Math.max(0, total - (parseDecimal(cashReceived) || 0));
 
-  async function sendWhatsAppStatement() {
-    if (!selected?.phone) {
-      alert('هاد الزبون ما عنده رقم هاتف!');
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!selectedCustomer || saleItems.length === 0) return;
+
+    const cashVal = parseDecimal(cashReceived) || 0;
+    if (cashVal > total) {
+      setAmountError('Fehler: Der gezahlte Betrag darf nicht größer als die Gesamtsumme sein!');
       return;
     }
+    setAmountError('');
+    setLoading(true);
 
-    // جيب العمليات اللي فيها دين فقط
-    const openTxns = txns.filter(t => parseFloat(t.credit_amount) > 0);
+    try {
+      // ── 1. أنشئ الفاتورة (header) ──────────────────────────
+      const { data: invoice, error: invErr } = await supabase
+        .from('invoices')
+        .insert({
+          customer_id:  selectedCustomer.id,
+          salesman_id:  user.id,
+          total_amount: total,
+          cash_received: cashVal,
+          status: 'completed',
+        })
+        .select()
+        .single();
 
-    if (openTxns.length === 0) {
-      alert('ما في ديون مفتوحة لهاد الزبون.');
-      return;
+      if (invErr) throw invErr;
+
+      // ── 2. أضف البنود (line items) ──────────────────────────
+      const items = saleItems
+        .filter(i => parseDecimal(i.quantity) && parseDecimal(i.price))
+        .map(i => ({
+          invoice_id:   invoice.id,
+          inventory_id: i.inventoryId,
+          quantity:     parseDecimal(i.quantity),
+          unit:         i.unit,
+          unit_price:   parseDecimal(i.price),
+        }));
+
+      const { error: itemsErr } = await supabase
+        .from('invoice_items')
+        .insert(items);
+
+      if (itemsErr) throw itemsErr;
+
+      // ── 3. حدّث ذاكرة الأسعار ──────────────────────────────
+      for (const item of saleItems) {
+        const qty = parseDecimal(item.quantity);
+        const price = parseDecimal(item.price);
+        if (!qty || !price) continue;
+        await supabase.from('price_memory').upsert({
+          customer_id: selectedCustomer.id,
+          inventory_id: item.inventoryId,
+          quantity: qty, unit: item.unit,
+          unit_price: price, total_price: qty * price,
+          last_used_at: new Date().toISOString(), use_count: 1,
+        }, { onConflict: 'customer_id,inventory_id,quantity,unit' });
+      }
+
+      // ── 4. حدّث دين الزبون ─────────────────────────────────
+      const debt = Math.max(0, total - cashVal);
+      const newDebt = parseFloat(selectedCustomer.total_debt || 0) + debt;
+      await supabase.from('customers')
+        .update({ total_debt: newDebt })
+        .eq('id', selectedCustomer.id);
+
+      const m = getRandom('NEW_SALE');
+      setMsg(`${m.text} ${m.emoji}`);
+      setTimeout(() => window.location.href = '/dashboard', 1500);
+
+    } catch (err) {
+      setMsg('صار خطأ: ' + (err.message || JSON.stringify(err)));
     }
-
-    const totalDebt = parseFloat(selected.total_debt || 0).toFixed(2);
-    let msg = `Hallo ${selected.name}, hier ist Ihre aktuelle Kontoübersicht (Offene Beträge):\n\n`;
-
-    openTxns.forEach(inv => {
-      const date  = new Date(inv.created_at).toLocaleDateString('de-DE');
-      const items = (inv.invoice_items || [])
-        .map(i => `${i.inventory?.name} (${i.quantity} ${i.unit || ''})`.trim())
-        .join(', ') || '—';
-      const open  = parseFloat(inv.credit_amount).toFixed(2);
-      msg += `📅 ${date}\n📦 Artikel: ${items}\n🔴 Offen: ${open} €\n\n`;
-    });
-
-    msg += `💰 Gesamtsumme (Offen): ${totalDebt} €\n\nVielen Dank!`;
-
-    // تنظيف رقم الهاتف وفتح واتساب
-    const phone = selected.phone.replace(/[\s\-\+]/g, '');
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-    window.open(url, '_blank');
+    setLoading(false);
   }
 
-  const filtered = search.trim()
-    ? customers.filter(c => c.name.includes(search) || (c.phone && c.phone.includes(search)))
+  const unitLabel = { pcs: 'قطعة', g: 'غرام', ctn: 'كرتون' };
+  const filteredCustomers = search.trim()
+    ? customers.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search)))
     : customers;
+  const showTop = !search.trim() && !selectedCustomer;
+
+  function CustomerBtn({ c }) {
+    const isSelected = selectedCustomer?.id === c.id;
+    return (
+      <button type="button" onClick={() => onCustomerSelect(c)}
+        style={{
+          width: '100%', padding: '14px 16px', borderRadius: '16px',
+          border: `1.5px solid ${isSelected ? '#CE1126' : '#1a1a1a'}`,
+          background: isSelected ? 'rgba(206,17,38,0.08)' : '#0f0f0f',
+          color: 'white', cursor: 'pointer', textAlign: 'right',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          transition: 'all 0.15s'
+        }}>
+        <div style={{ textAlign: 'left' }}>
+          {parseDecimal(c.total_debt) > 0 && (
+            <span style={{ fontSize: '11px', color: '#CE1126', fontWeight: 700 }}>€{parseDecimal(c.total_debt).toFixed(2)}</span>
+          )}
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontWeight: 700, fontSize: '14px' }}>{c.name}</div>
+          {c.phone && <div style={{ color: '#444', fontSize: '11px' }}>{c.phone}</div>}
+        </div>
+      </button>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#080808', color: 'white', fontFamily: 'system-ui', paddingBottom: '60px' }}>
@@ -120,287 +230,220 @@ export default function Customers() {
       <div style={{ height: '4px', background: 'linear-gradient(90deg, #000 25%, #fff 25%, #fff 50%, #007A3D 50%, #007A3D 75%, #CE1126 75%)' }} />
 
       <div style={{ padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #151515' }}>
-        <button onClick={() => {
-          if (editMode) { setEditMode(false); return; }
-          if (selected) { setSelected(null); setTxns([]); return; }
-          router.push('/dashboard');
-        }}
+        <button onClick={() => router.back()}
           style={{ background: 'transparent', border: '1px solid #222', borderRadius: '12px', padding: '8px 14px', color: '#555', cursor: 'pointer', fontSize: '13px' }}>
           رجوع
         </button>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '11px', color: '#007A3D', letterSpacing: '2px', textTransform: 'uppercase' }}>Customers</div>
-          <div style={{ fontSize: '20px', fontWeight: 900 }}>الزبائن 👥</div>
+          <div style={{ fontSize: '11px', color: '#CE1126', letterSpacing: '2px', textTransform: 'uppercase' }}>New Sale</div>
+          <div style={{ fontSize: '20px', fontWeight: 900 }}>بيع جديد 🧾</div>
         </div>
       </div>
 
-      {/* قائمة الزبائن */}
-      {!selected && (
-        <div style={{ padding: '16px 20px 0' }}>
-          <input type="text" placeholder="ابحث عن زبون..." value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{ width: '100%', background: '#161616', border: '1.5px solid #333', borderRadius: '16px', padding: '14px 16px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box', marginBottom: '14px' }}
-            onFocus={e => e.target.style.borderColor = '#CE1126'}
-            onBlur={e => e.target.style.borderColor = '#333'}
-          />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {filtered.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#333' }}>
-                <div style={{ fontSize: '32px', marginBottom: '8px' }}>👥</div>
-                <div>ما في زبائن</div>
-              </div>
-            )}
+      <form onSubmit={handleSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-            {/* أكثر 20 زبون نشاطاً — bubble buttons */}
-            {!search.trim() && filtered.filter(c => c.txnCount > 0).length > 0 && (
-              <div style={{ marginBottom: '8px' }}>
-                <p style={{ fontSize: '10px', color: '#e8971e', letterSpacing: '1px',
-                  textAlign: 'right', marginBottom: '8px' }}>⭐ الأكثر نشاطاً</p>
+        {!selectedCustomer && (
+          <div>
+            <p style={{ fontSize: '10px', color: '#444', letterSpacing: '2px', textTransform: 'uppercase', textAlign: 'right', marginBottom: '12px' }}>اختار الزبون</p>
+            <input type="text" placeholder="ابحث عن زبون..." value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ width: '100%', background: '#161616', border: '1.5px solid #333', borderRadius: '16px', padding: '14px 16px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box', marginBottom: '16px' }}
+              onFocus={e => e.target.style.borderColor = '#CE1126'}
+              onBlur={e => e.target.style.borderColor = '#333'}
+            />
+            {showTop && topByCount.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <p style={{ fontSize: '10px', color: '#e8971e', letterSpacing: '1px', textAlign: 'right', marginBottom: '8px' }}>⭐ الأكثر نشاطاً</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end' }}>
-                  {filtered.filter(c => c.txnCount > 0).slice(0, 20).map(c => (
-                    <button key={`top-${c.id}`} onClick={() => openCustomer(c)}
-                      style={{ padding: '8px 14px', borderRadius: '20px',
-                        border: '1.5px solid rgba(232,151,30,0.4)',
-                        background: 'rgba(232,151,30,0.08)',
-                        color: '#e8971e', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
+                  {topByCount.map(c => (
+                    <button key={c.id} type="button" onClick={() => onCustomerSelect(c)}
+                      style={{ padding: '8px 14px', borderRadius: '20px', border: '1.5px solid rgba(232,151,30,0.4)', background: 'rgba(232,151,30,0.08)', color: '#e8971e', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>
                       {c.name}
                     </button>
                   ))}
                 </div>
               </div>
             )}
-
-            <p style={{ fontSize: '10px', color: '#333', letterSpacing: '2px',
-              textTransform: 'uppercase', textAlign: 'right', marginBottom: '4px' }}>
-              كل الزبائن
-            </p>
-
-            {filtered.map((c, i) => (
-              <>
-                {/* فاصل بعد أول 20 */}
-                {!search.trim() && i === 20 && (
-                  <div key="divider" style={{ fontSize: '10px', color: '#333', letterSpacing: '2px',
-                    textTransform: 'uppercase', textAlign: 'right', marginTop: '8px', marginBottom: '4px' }}>
-                    بقية الزبائن
-                  </div>
-                )}
-              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <button onClick={() => openCustomer(c)}
-                  style={{ flex: 1, padding: '14px 16px', borderRadius: '16px', border: '1px solid #1a1a1a', background: '#0f0f0f', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.15s' }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = '#CE1126'}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = '#1a1a1a'}>
-                  <div style={{ textAlign: 'left' }}>
-                    {parseFloat(c.total_debt) > 0
-                      ? <span style={{ color: '#CE1126', fontWeight: 700, fontSize: '14px' }}>€{parseFloat(c.total_debt).toFixed(2)}</span>
-                      : <span style={{ color: '#007A3D', fontSize: '12px' }}>نظيف ✓</span>
-                    }
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: 700, fontSize: '14px' }}>{c.name}</div>
-                    {c.phone && <div style={{ color: '#444', fontSize: '11px' }}>{c.phone}</div>}
-                    {c.notes && <div style={{ color: '#555', fontSize: '10px', marginTop: '2px' }}>📝 {c.notes.slice(0, 30)}{c.notes.length > 30 ? '...' : ''}</div>}
-                  </div>
-                </button>
-                {c.phone && (
-                  <button onClick={() => openWhatsAppDirect(c.phone)}
-                    style={{ padding: '12px 10px', borderRadius: '12px', border: '1px solid rgba(37,211,102,0.3)',
-                      background: 'rgba(37,211,102,0.07)', cursor: 'pointer', fontSize: '18px',
-                      lineHeight: 1, flexShrink: 0 }}>
-                    💬
-                  </button>
-                )}
-              </div>
-              </>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* تفاصيل زبون */}
-      {selected && !editMode && (
-        <div style={{ padding: '20px' }}>
-
-          <div style={{ background: '#0f0f0f', border: '1.5px solid #CE1126', borderRadius: '20px', padding: '18px', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => setEditMode(true)}
-                  style={{ background: 'rgba(232,151,30,0.1)', border: '1px solid rgba(232,151,30,0.3)', borderRadius: '10px', padding: '6px 12px', color: '#e8971e', fontSize: '12px', cursor: 'pointer', fontWeight: 700 }}>
-                  تعديل
-                </button>
-                <button onClick={deleteCustomer}
-                  style={{ background: 'rgba(206,17,38,0.1)', border: '1px solid rgba(206,17,38,0.3)', borderRadius: '10px', padding: '6px 12px', color: '#CE1126', fontSize: '12px', cursor: 'pointer', fontWeight: 700 }}>
-                  حذف
-                </button>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontWeight: 900, fontSize: '20px' }}>{selected.name}</div>
-                {selected.phone && <div style={{ color: '#444', fontSize: '13px', marginTop: '2px' }}>📞 {selected.phone}</div>}
-              </div>
-            </div>
-
-            <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              {parseFloat(selected.total_debt) > 0
-                ? <span style={{ color: '#CE1126', fontWeight: 900, fontSize: '22px' }}>€{parseFloat(selected.total_debt).toFixed(2)}</span>
-                : <span style={{ color: '#007A3D', fontWeight: 700 }}>حساب نظيف ✓</span>
-              }
-              <span style={{ color: '#555', fontSize: '12px' }}>الدين الحالي</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+              {filteredCustomers.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '20px', color: '#333', fontSize: '13px' }}>ما في زبون بهاد الاسم</div>
+              )}
+              {filteredCustomers.map(c => <CustomerBtn key={c.id} c={c} />)}
             </div>
           </div>
+        )}
 
-          {/* الملاحظات */}
-          {selected.notes && (
-            <div style={{ background: '#0f0f0f', border: '1px solid #1a1a1a', borderRadius: '16px', padding: '14px 16px', marginBottom: '16px', textAlign: 'right' }}>
-              <div style={{ fontSize: '11px', color: '#555', marginBottom: '6px' }}>📝 ملاحظات</div>
-              <p style={{ color: 'white', fontSize: '13px', margin: 0 }}>{selected.notes}</p>
-            </div>
-          )}
-
-          {/* CRM Tags */}
-          <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {/* WhatsApp Status */}
-            <div>
-              <p style={{ fontSize: '10px', color: '#444', textAlign: 'right', marginBottom: '5px' }}>حالة WhatsApp</p>
-              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                {[['Active','نشط 🟢'],['No_Reply','ما رد 🟡'],['No_WhatsApp','بدون WA 🔴']].map(([v, l]) => {
-                  const isActive = (selected.whatsapp_status || 'Active') === v;
-                  return (
-                    <button key={v} onClick={async () => {
-                      await supabase.from('customers').update({ whatsapp_status: v }).eq('id', selected.id);
-                      setSelected({ ...selected, whatsapp_status: v });
-                      setCustomers(customers.map(c => c.id === selected.id ? { ...c, whatsapp_status: v } : c));
-                    }}
-                      style={{ padding: '6px 10px', borderRadius: '10px', border: 'none', fontSize: '11px', cursor: 'pointer',
-                        background: isActive ? '#222' : '#111',
-                        color: isActive ? 'white' : '#444',
-                        outline: isActive ? '1.5px solid #555' : 'none' }}>
-                      {l}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Interest Level */}
-            <div>
-              <p style={{ fontSize: '10px', color: '#444', textAlign: 'right', marginBottom: '5px' }}>مستوى الاهتمام</p>
-              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                {[['Interested','مهتم ✅'],['Not_Interested','غير مهتم ❌']].map(([v, l]) => {
-                  const isActive = (selected.interest_level || 'Interested') === v;
-                  return (
-                    <button key={v} onClick={async () => {
-                      await supabase.from('customers').update({ interest_level: v }).eq('id', selected.id);
-                      setSelected({ ...selected, interest_level: v });
-                      setCustomers(customers.map(c => c.id === selected.id ? { ...c, interest_level: v } : c));
-                    }}
-                      style={{ padding: '6px 10px', borderRadius: '10px', border: 'none', fontSize: '11px', cursor: 'pointer',
-                        background: isActive ? '#222' : '#111',
-                        color: isActive ? 'white' : '#444',
-                        outline: isActive ? '1.5px solid #555' : 'none' }}>
-                      {l}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-          {/* زر بيع جديد */}
-          <button onClick={() => router.push(`/new-sale?customer=${selected.id}`)}
-            style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1.5px solid #CE1126', background: 'rgba(206,17,38,0.08)', color: '#CE1126', fontWeight: 700, fontSize: '14px', cursor: 'pointer', marginBottom: '10px' }}>
-            بيع جديد لهاد الزبون ←
-          </button>
-
-          {/* واتساب — رسالة مباشرة (للكل) */}
-          {selected.phone && (
-            <button onClick={() => openWhatsAppDirect(selected.phone)}
-              style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1.5px solid rgba(37,211,102,0.5)', background: 'rgba(37,211,102,0.07)', color: '#25D366', fontWeight: 700, fontSize: '13px', cursor: 'pointer', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '16px' }}>💬</span> Direktnachricht senden
-            </button>
-          )}
-
-          {/* واتساب — كشف الحساب (للي عندهم دين فقط) */}
-          {parseFloat(selected.total_debt) > 0 && (
-            <button onClick={sendWhatsAppStatement}
-              style={{ width: '100%', padding: '14px', borderRadius: '16px', border: '1.5px solid rgba(37,211,102,0.3)', background: 'rgba(37,211,102,0.04)', color: '#1aa34a', fontWeight: 700, fontSize: '13px', cursor: 'pointer', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '16px' }}>📲</span> Kontoauszug per WhatsApp senden
-            </button>
-          )}
-
-          {/* سجل العمليات */}
-          <p style={{ fontSize: '10px', color: '#333', letterSpacing: '2px', textTransform: 'uppercase', textAlign: 'right', marginBottom: '10px' }}>سجل العمليات</p>
-
-          {txns.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '30px', color: '#333' }}>ما في عمليات</div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {txns.map(inv => (
-              <div key={inv.invoice_id || inv.id} style={{ background: '#0f0f0f', border: '1px solid #1a1a1a', borderRadius: '16px', padding: '12px 16px' }}>
-                {/* هيدر الفاتورة */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ color: '#CE1126', fontWeight: 900, fontSize: '15px' }}>€{parseFloat(inv.total_amount || 0).toFixed(2)}</span>
-                  <span style={{ color: '#444', fontSize: '10px' }}>
-                    {new Date(inv.created_at).toLocaleDateString('ar')} · {new Date(inv.created_at).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+        {selectedCustomer && (
+          <>
+            <div style={{ background: '#0f0f0f', border: '1.5px solid #CE1126', borderRadius: '18px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <button type="button" onClick={() => { setSelectedCustomer(null); setSaleItems([]); setSearch(''); }}
+                  style={{ background: 'transparent', border: '1px solid #333', borderRadius: '10px', padding: '6px 10px', color: '#555', cursor: 'pointer', fontSize: '12px' }}>
+                  تغيير
+                </button>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontWeight: 900, fontSize: '18px' }}>{selectedCustomer.name}</div>
+                  {selectedCustomer.phone && <div style={{ color: '#444', fontSize: '12px' }}>{selectedCustomer.phone}</div>}
                 </div>
-                {/* البنود */}
-                <div style={{ borderTop: '1px solid #1a1a1a', paddingTop: '6px', marginBottom: '6px' }}>
-                  {(inv.invoice_items || []).map((item, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#aaa', marginBottom: '2px' }}>
-                      <span style={{ color: '#555' }}>€{parseFloat(item.line_total || 0).toFixed(2)}</span>
-                      <span>{item.inventory?.name} · {item.quantity} {item.unit}</span>
+              </div>
+              {customerDebt > 0 && (
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #1a1a1a' }}>
+                  <button type="button" onClick={() => setShowDebtDetails(!showDebtDetails)}
+                    style={{ width: '100%', background: 'rgba(206,17,38,0.08)', border: '1px solid rgba(206,17,38,0.3)', borderRadius: '12px', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                    <span style={{ color: '#CE1126', fontSize: '12px' }}>{showDebtDetails ? '▲ اخفي' : '▼ التفاصيل'}</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ color: '#555', fontSize: '11px' }}>دين مستحق: </span>
+                      <span style={{ color: '#CE1126', fontWeight: 900, fontSize: '16px' }}>€{customerDebt.toFixed(2)}</span>
                     </div>
-                  ))}
+                  </button>
+                  {showDebtDetails && customerLastSales.length > 0 && (
+                    <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {customerLastSales.map(s => (
+                        <div key={s.id} style={{ background: '#111', borderRadius: '12px', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ textAlign: 'left' }}>
+                            {parseDecimal(s.credit_amount) > 0 && (
+                              <span style={{ color: '#CE1126', fontSize: '12px', fontWeight: 700 }}>دين: €{parseDecimal(s.credit_amount).toFixed(2)}</span>
+                            )}
+                            <div style={{ color: '#333', fontSize: '10px' }}>{new Date(s.created_at).toLocaleDateString('ar')}</div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ color: 'white', fontSize: '13px', fontWeight: 700 }}>{s.inventory?.name}</div>
+                            <div style={{ color: '#555', fontSize: '11px' }}>€{parseDecimal(s.total_amount).toFixed(2)}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {/* كاش / دين */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <span style={{ color: '#007A3D', fontSize: '11px' }}>كاش: €{parseFloat(inv.cash_received || 0).toFixed(2)}</span>
-                    {parseFloat(inv.credit_amount) > 0 && (
-                      <span style={{ color: '#e8971e', fontSize: '11px', marginRight: '8px' }}> · دين: €{parseFloat(inv.credit_amount).toFixed(2)}</span>
-                    )}
+              )}
+              {customerDebt === 0 && (
+                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #1a1a1a', textAlign: 'right' }}>
+                  <span style={{ color: '#007A3D', fontSize: '12px' }}>حساب نظيف ✓</span>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p style={{ fontSize: '10px', color: '#444', letterSpacing: '2px', textTransform: 'uppercase', textAlign: 'right', marginBottom: '12px' }}>الاصناف والاسعار</p>
+              {saleItems.length > 0 && (
+                <div style={{ background: 'rgba(0,122,61,0.08)', border: '1px solid rgba(0,122,61,0.2)', borderRadius: '12px', padding: '10px 14px', marginBottom: '12px', textAlign: 'right' }}>
+                  <p style={{ color: '#007A3D', fontSize: '12px', margin: 0 }}>آخر اسعار {selectedCustomer.name} — عدّل اذا بدك</p>
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {inventory.map(item => {
+                  const selected = saleItems.find(i => i.inventoryId === item.id);
+                  const maxQty = parseDecimal(item.stock_quantity);
+                  return (
+                    <div key={item.id} style={{ borderRadius: '16px', border: `1.5px solid ${selected ? '#CE1126' : '#1a1a1a'}`, background: selected ? 'rgba(206,17,38,0.05)' : '#0f0f0f', overflow: 'hidden', transition: 'all 0.15s' }}>
+                      <button type="button" onClick={() => toggleInventoryItem(item)}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: `2px solid ${selected ? '#CE1126' : '#333'}`, background: selected ? '#CE1126' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {selected && <span style={{ color: 'white', fontSize: '10px' }}>✓</span>}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ color: 'white', fontWeight: 700, fontSize: '14px' }}>{item.name}</div>
+                          <div style={{ color: '#444', fontSize: '11px' }}>
+                            {unitLabel[item.default_unit]} · متوفر: {maxQty}
+                          </div>
+                        </div>
+                      </button>
+                      {selected && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '0 14px 14px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <input type="text" inputMode="decimal" placeholder="الكمية"
+                              value={selected.quantity}
+                              onChange={e => updateField(item.id, 'quantity', e.target.value)}
+                              style={{ background: '#0a0a0a', border: '1.5px solid #222', borderRadius: '12px', padding: '10px 12px', color: 'white', fontSize: '13px', textAlign: 'right', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                              onFocus={e => e.target.style.borderColor = '#CE1126'}
+                              onBlur={e => e.target.style.borderColor = '#222'}
+                            />
+                            <input type="text" inputMode="decimal" placeholder="السعر €"
+                              value={selected.price}
+                              onChange={e => updateField(item.id, 'price', e.target.value)}
+                              style={{ background: '#0a0a0a', border: '1.5px solid #222', borderRadius: '12px', padding: '10px 12px', color: 'white', fontSize: '13px', textAlign: 'right', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                              onFocus={e => e.target.style.borderColor = '#007A3D'}
+                              onBlur={e => e.target.style.borderColor = '#222'}
+                            />
+                          </div>
+                          {parseDecimal(selected.quantity) > maxQty && (
+                            <div style={{ background: 'rgba(206,17,38,0.1)', border: '1px solid rgba(206,17,38,0.2)', borderRadius: '10px', padding: '6px 10px', textAlign: 'right' }}>
+                              <span style={{ color: '#CE1126', fontSize: '11px' }}>الكمية المتوفرة: {maxQty} فقط!</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {saleItems.length > 0 && (
+              <div>
+                <p style={{ fontSize: '10px', color: '#444', letterSpacing: '2px', textTransform: 'uppercase', textAlign: 'right', marginBottom: '12px' }}>الدفع</p>
+                <div style={{ background: '#0f0f0f', border: '1px solid #1a1a1a', borderRadius: '16px', padding: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <span style={{ color: '#CE1126', fontWeight: 900, fontSize: '22px' }}>€{total.toFixed(2)}</span>
+                    <span style={{ color: '#444', fontSize: '12px' }}>المجموع</span>
                   </div>
-                  <div style={{ color: '#444', fontSize: '11px' }}>{inv.users?.display_name || inv.users?.full_name}</div>
+                  <input type="text" inputMode="decimal" placeholder="كم دفع؟ €"
+                    value={cashReceived}
+                    onChange={e => {
+                      const val = e.target.value.replace(/[,،]/g, '.');
+                      setCashReceived(val);
+                      if (parseDecimal(val) > total) {
+                        setAmountError('Fehler: Der gezahlte Betrag darf nicht größer als die Gesamtsumme sein!');
+                      } else {
+                        setAmountError('');
+                      }
+                    }}
+                    style={{ width: '100%', background: '#161616', border: `1.5px solid ${amountError ? '#CE1126' : '#222'}`, borderRadius: '12px', padding: '12px 14px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box' }}
+                    onFocus={e => e.target.style.borderColor = amountError ? '#CE1126' : '#007A3D'}
+                    onBlur={e => e.target.style.borderColor = amountError ? '#CE1126' : '#222'}
+                  />
+                  {amountError && (
+                    <div style={{ background: 'rgba(206,17,38,0.08)', border: '1px solid rgba(206,17,38,0.3)', borderRadius: '10px', padding: '10px 14px', marginTop: '8px' }}>
+                      <p style={{ color: '#CE1126', fontWeight: 700, fontSize: '11px', margin: 0 }}>⛔ {amountError}</p>
+                    </div>
+                  )}
+                  {cashReceived !== '' && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #1a1a1a' }}>
+                      <span style={{ fontWeight: 900, fontSize: '18px', color: debt > 0 ? '#CE1126' : '#007A3D' }}>
+                        {debt > 0 ? `دين: €${debt.toFixed(2)}` : 'مدفوع بالكامل ✓'}
+                      </span>
+                      <span style={{ color: '#444', fontSize: '12px' }}>الباقي</span>
+                    </div>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            )}
 
-      {/* صفحة التعديل */}
-      {selected && editMode && (
-        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <p style={{ fontSize: '10px', color: '#444', letterSpacing: '2px', textTransform: 'uppercase', textAlign: 'right', marginBottom: '4px' }}>تعديل معلومات الزبون</p>
+            {msg && (
+              <div style={{ background: msg.includes('خطأ') ? 'rgba(206,17,38,0.1)' : 'rgba(0,122,61,0.1)', border: `1px solid ${msg.includes('خطأ') ? 'rgba(206,17,38,0.2)' : 'rgba(0,122,61,0.2)'}`, borderRadius: '12px', padding: '12px', textAlign: 'center' }}>
+                <p style={{ color: msg.includes('خطأ') ? '#CE1126' : '#007A3D', fontWeight: 700, fontSize: '14px', margin: 0 }}>{msg}</p>
+              </div>
+            )}
 
-          <input type="text" placeholder="اسم الزبون" value={editName}
-            onChange={e => setEditName(e.target.value)}
-            style={{ width: '100%', background: '#161616', border: '1.5px solid #222', borderRadius: '16px', padding: '14px 16px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box' }}
-            onFocus={e => e.target.style.borderColor = '#e8971e'}
-            onBlur={e => e.target.style.borderColor = '#222'}
-          />
-
-          <input type="text" placeholder="رقم الهاتف" value={editPhone}
-            onChange={e => setEditPhone(e.target.value)}
-            style={{ width: '100%', background: '#161616', border: '1.5px solid #222', borderRadius: '16px', padding: '14px 16px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box' }}
-            onFocus={e => e.target.style.borderColor = '#e8971e'}
-            onBlur={e => e.target.style.borderColor = '#222'}
-          />
-
-          <textarea placeholder="ملاحظات" value={editNotes}
-            onChange={e => setEditNotes(e.target.value)} rows={3}
-            style={{ width: '100%', background: '#161616', border: '1.5px solid #222', borderRadius: '16px', padding: '14px 16px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box', resize: 'none', fontFamily: 'system-ui' }}
-            onFocus={e => e.target.style.borderColor = '#e8971e'}
-            onBlur={e => e.target.style.borderColor = '#222'}
-          />
-
-          <button onClick={saveEdit} disabled={saving}
-            style={{ width: '100%', padding: '16px', borderRadius: '16px', border: 'none', background: saving ? '#1a1a1a' : 'linear-gradient(135deg, #e8971e, #c97d10)', color: saving ? '#333' : 'black', fontWeight: 900, fontSize: '14px', cursor: saving ? 'not-allowed' : 'pointer' }}>
-            {saving ? '...' : 'حفظ التعديل ←'}
-          </button>
-        </div>
-      )}
+            {saleItems.length > 0 && (
+              <button type="submit" disabled={loading || !!amountError}
+                style={{ width: '100%', padding: '18px', borderRadius: '18px', border: 'none', background: loading || amountError ? '#1a1a1a' : 'linear-gradient(135deg, #CE1126, #a00d1e)', color: loading || amountError ? '#333' : 'white', fontWeight: 900, fontSize: '16px', cursor: loading || amountError ? 'not-allowed' : 'pointer' }}>
+                {loading ? '...' : 'تسجيل البيع ←'}
+              </button>
+            )}
+          </>
+        )}
+      </form>
 
       <div style={{ height: '4px', background: 'linear-gradient(90deg, #CE1126 25%, #007A3D 25%, #007A3D 50%, #fff 50%, #fff 75%, #000 75%)', position: 'fixed', bottom: 0, width: '100%' }} />
     </div>
+  );
+}
+
+export default function NewSale() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#080808' }} />}>
+      <NewSaleContent />
+    </Suspense>
   );
 }
