@@ -32,7 +32,14 @@ export default function Customers() {
       txns?.forEach(t => { countMap[t.customer_id] = (countMap[t.customer_id] || 0) + 1; });
       const sorted = custs
         .map(c => ({ ...c, txnCount: countMap[c.id] || 0 }))
-        .sort((a, b) => b.txnCount - a.txnCount);
+        .sort((a, b) => {
+          const debtA = parseFloat(a.total_debt || 0);
+          const debtB = parseFloat(b.total_debt || 0);
+          // أولاً: من عنده دين يطلع فوق (الأعلى دين أول)
+          if (debtB !== debtA) return debtB - debtA;
+          // ثانياً: نفس الدين → الأكثر نشاطاً أول
+          return b.txnCount - a.txnCount;
+        });
       setCustomers(sorted);
     }
   }
