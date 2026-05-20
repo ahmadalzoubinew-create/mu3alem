@@ -19,6 +19,11 @@ function NewSaleContent() {
   const [cashReceived, setCashReceived] = useState('');
   const [amountError, setAmountError] = useState('');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 200);
+    return () => clearTimeout(t);
+  }, [search]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [user, setUser] = useState(null);
@@ -133,6 +138,13 @@ function NewSaleContent() {
       return;
     }
     setAmountError('');
+
+    // ── offline guard ───────────────────────────────────────
+    if (!navigator.onLine) {
+      setMsg('لا يوجد اتصال بالإنترنت — لا يمكن تسجيل البيع الآن');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -222,8 +234,8 @@ function NewSaleContent() {
   }
 
   const unitLabel = { pcs: 'قطعة', g: 'غرام', ctn: 'كرتون' };
-  const filteredCustomers = search.trim()
-    ? customers.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search)))
+  const filteredCustomers = debouncedSearch.trim()
+    ? customers.filter(c => c.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || (c.phone && c.phone.includes(debouncedSearch)))
     : customers;
   const showTop = !search.trim() && !selectedCustomer;
 
@@ -273,7 +285,7 @@ function NewSaleContent() {
         {!selectedCustomer && (
           <div>
             <p style={{ fontSize: '10px', color: '#444', letterSpacing: '2px', textTransform: 'uppercase', textAlign: 'right', marginBottom: '12px' }}>اختار الزبون</p>
-            <input type="text" placeholder="ابحث عن زبون..." value={search}
+            <input autoFocus type="text" placeholder="ابحث عن زبون..." value={search}
               onChange={e => setSearch(e.target.value)}
               style={{ width: '100%', background: '#161616', border: '1.5px solid #333', borderRadius: '16px', padding: '14px 16px', color: 'white', fontSize: '14px', textAlign: 'right', outline: 'none', boxSizing: 'border-box', marginBottom: '16px' }}
               onFocus={e => e.target.style.borderColor = '#CE1126'}

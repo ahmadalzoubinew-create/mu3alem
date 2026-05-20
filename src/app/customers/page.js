@@ -8,6 +8,11 @@ export default function Customers() {
   const [selected, setSelected] = useState(null);
   const [txns, setTxns] = useState([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 200);
+    return () => clearTimeout(t);
+  }, [search]);
   const [editMode, setEditMode] = useState(false);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
@@ -152,7 +157,7 @@ export default function Customers() {
             )}
 
             {/* أكثر 20 زبون نشاطاً — bubble buttons */}
-            {!search.trim() && filtered.filter(c => c.txnCount > 0).length > 0 && (
+            {!debouncedSearch.trim() && filtered.filter(c => c.txnCount > 0).length > 0 && (
               <div style={{ marginBottom: '8px' }}>
                 <p style={{ fontSize: '10px', color: '#e8971e', letterSpacing: '1px',
                   textAlign: 'right', marginBottom: '8px' }}>⭐ الأكثر نشاطاً</p>
@@ -178,7 +183,7 @@ export default function Customers() {
             {filtered.map((c, i) => (
               <>
                 {/* فاصل بعد أول 20 */}
-                {!search.trim() && i === 20 && (
+                {!debouncedSearch.trim() && i === 20 && (
                   <div key="divider" style={{ fontSize: '10px', color: '#333', letterSpacing: '2px',
                     textTransform: 'uppercase', textAlign: 'right', marginTop: '8px', marginBottom: '4px' }}>
                     بقية الزبائن

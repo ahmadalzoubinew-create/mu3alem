@@ -49,10 +49,10 @@ export default function Reconciliation() {
 
       const since = lastSettlement?.settled_at || '2000-01-01';
 
-      // Transactions since last settlement
+      // Invoices since last settlement
       const { data: txns } = await supabase
-        .from('transactions')
-        .select('*, inventory(name, default_unit)')
+        .from('invoices')
+        .select('*, invoice_items(quantity, inventory_id, line_total, inventory(name, default_unit))')
         .eq('salesman_id', u.id)
         .eq('status', 'completed')
         .gt('created_at', since);
@@ -64,19 +64,20 @@ export default function Reconciliation() {
       const expectedCash  = totalCash + prevRemaining;
       const handedIn      = parseFloat(lastSettlement?.cash_handed || 0);
 
-      // Stock movement per item
+      // Stock movement per item — from invoice_items
       const stockMap = {};
-      txns?.forEach(t => {
-        if (!t.inventory_id) return;
-        const key = t.inventory_id;
-        if (!stockMap[key]) stockMap[key] = {
-          name: t.inventory?.name,
-          unit: t.inventory?.default_unit,
-          qty: 0,
-          revenue: 0,
-        };
-        stockMap[key].qty     += parseFloat(t.quantity || 0);
-        stockMap[key].revenue += parseFloat(t.total_amount || 0);
+      txns?.forEach(inv => {
+        (inv.invoice_items || []).forEach(item => {
+          if (!item.inventory_id) return;
+          const key = item.inventory_id;
+          if (!stockMap[key]) stockMap[key] = {
+            name: item.inventory?.name,
+            unit: item.inventory?.default_unit,
+            qty: 0, revenue: 0,
+          };
+          stockMap[key].qty     += parseFloat(item.quantity || 0);
+          stockMap[key].revenue += parseFloat(item.line_total || 0);
+        });
       });
 
       // Discrepancy: cash in hand vs what they should have
