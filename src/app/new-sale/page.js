@@ -107,6 +107,7 @@ function NewSaleContent() {
   }
 
   function updateField(inventoryId, field, value) {
+    if (value.trim().startsWith('-')) return; // لا يُسمح بالأرقام السالبة
     const normalized = value.replace(/[,،]/g, '.');
     if (field === 'quantity') {
       const item = inventory.find(i => i.id === inventoryId);
@@ -135,6 +136,19 @@ function NewSaleContent() {
     setLoading(true);
 
     try {
+      // ── 0. تحقق من المخزون الحالي قبل الإدخال ──────────────
+      for (const item of saleItems) {
+        const qty = parseDecimal(item.quantity);
+        if (!qty) continue;
+        const { data: live } = await supabase
+          .from('inventory').select('stock_quantity, name')
+          .eq('id', item.inventoryId).single();
+        if (live && parseFloat(live.stock_quantity) < qty) {
+          setMsg(`خطأ: ${live.name} — متوفر ${live.stock_quantity} فقط!`);
+          setLoading(false);
+          return;
+        }
+      }
       // ── 1. أنشئ الفاتورة (header) ──────────────────────────
       const { data: invoice, error: invErr } = await supabase
         .from('invoices')
@@ -190,12 +204,12 @@ function NewSaleContent() {
         }
       }
 
-      // ── 4. حدّث دين الزبون ─────────────────────────────────
+      // ── 4. حدّث دين الزبون بشكل atomic ────────────────────
       const debt = Math.max(0, total - cashVal);
-      const newDebt = parseFloat(selectedCustomer.total_debt || 0) + debt;
-      await supabase.from('customers')
-        .update({ total_debt: newDebt })
-        .eq('id', selectedCustomer.id);
+      await supabase.rpc('increment_debt', {
+        p_customer_id: selectedCustomer.id,
+        p_delta: debt,
+      });
 
       const m = getRandom('NEW_SALE');
       setMsg(`${m.text} ${m.emoji}`);
@@ -407,6 +421,7 @@ function NewSaleContent() {
                     value={cashReceived}
                     onChange={e => {
                       const val = e.target.value.replace(/[,،]/g, '.');
+                      if (val.trim().startsWith('-')) return;
                       setCashReceived(val);
                       if (parseDecimal(val) > total) {
                         setAmountError('Fehler: Der gezahlte Betrag darf nicht größer als die Gesamtsumme sein!');

@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { getRandom } from '../lib/messages';
 import { useRouter } from 'next/navigation';
 
 export default function CollectCash() {
@@ -60,21 +61,14 @@ export default function CollectCash() {
       notes: 'تحصيل كاش',
     });
 
-    if (error) {
-      // inventory_id مش null — نحتاج نعمله بطريقة ثانية
-      // نحدث الدين مباشرة
-      await supabase.from('customers')
-        .update({ total_debt: Math.max(0, parseFloat(selectedCustomer.total_debt) - paid) })
-        .eq('id', selectedCustomer.id);
-    }
+    // تحديث الدين بشكل atomic
+    await supabase.rpc('increment_debt', {
+      p_customer_id: selectedCustomer.id,
+      p_delta: -paid,  // سالب لأننا نطرح الدين
+    });
 
-    // تحديث الدين مباشرة
-    const newDebt = Math.max(0, parseFloat(selectedCustomer.total_debt) - paid);
-    await supabase.from('customers')
-      .update({ total_debt: newDebt })
-      .eq('id', selectedCustomer.id);
-
-    setMsg('الكاش وصل يا معلم 💵');
+    const m = getRandom('CASH_COLLECTION');
+    setMsg(`${m.text} ${m.emoji}`);
     setAmount('');
     setSelectedCustomer(null);
     fetchCustomers();
